@@ -130,21 +130,24 @@ impl LinuxRecorder {
             .spawn(move || {
                 let remote_file = dir.join("remote.wav");
                 let local_file = dir.join("local.wav");
-                // Your side can start at once; the phone's needs the audio link.
-                let local = spawn_record(None, &local_file).ok();
+                // The phone's voice needs the audio link, which exists only while the call
+                // audio is on this computer. Your microphone is recorded only together with
+                // it: a recording of just your room, with no call in it, is never wanted.
                 let mut remote = None;
+                let mut local = None;
                 let end = Instant::now() + FIND_TIMEOUT;
                 while remote.is_none() && !flag.load(Ordering::Relaxed) && Instant::now() < end {
                     if let Some(name) = pw_dump().and_then(|j| find_remote_source(&j, &address)) {
                         remote = spawn_record(Some(&name), &remote_file).ok();
+                        if remote.is_some() {
+                            local = spawn_record(None, &local_file).ok();
+                        }
                     } else {
                         thread::sleep(Duration::from_millis(400));
                     }
                 }
                 if remote.is_none() {
-                    log::warn!(
-                        "no voice stream for {address} appeared; recording only the microphone"
-                    );
+                    log::warn!("no voice stream for {address} appeared; nothing is recorded");
                 }
                 while !flag.load(Ordering::Relaxed) {
                     thread::sleep(Duration::from_millis(100));
@@ -155,9 +158,11 @@ impl LinuxRecorder {
                 if let Some(c) = local {
                     stop_child(c);
                 }
+                // Without the other side there is no call recording.
+                let remote = non_empty(remote_file);
                 RecordedAudio {
-                    remote: non_empty(remote_file),
-                    local: non_empty(local_file),
+                    local: remote.as_ref().and_then(|_| non_empty(local_file)),
+                    remote,
                 }
             })
             .map_err(|e| PlatformError::Other(e.to_string()))?;

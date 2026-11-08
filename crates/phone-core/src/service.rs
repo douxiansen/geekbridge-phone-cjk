@@ -183,6 +183,9 @@ struct Inner {
     gate: Gate,
     cmd: Sender<Command>,
     next_token: Mutex<u64>,
+    /// Set when the user answered or dialled from this app: the call's voice
+    /// should then come to this computer once the call is active.
+    audio_wanted: Mutex<Option<Instant>>,
     /// Set by [`Handle::retry_messages`]: reconnect the message link now.
     retry_messages: AtomicBool,
 }
@@ -302,6 +305,7 @@ impl Service {
             },
             cmd: cmd_tx,
             next_token: Mutex::new(0),
+            audio_wanted: Mutex::new(None),
             retry_messages: AtomicBool::new(false),
         });
         let (msg_tx, msg_rx) = mpsc::channel::<(u64, String, String)>();
@@ -480,6 +484,7 @@ fn calls_loop(inner: Arc<Inner>) {
                             ..
                         } = e
                         {
+                            route_audio_here(&inner, &phone.address);
                             start_recording(&inner, &phone.address, id, &mut recorders);
                         }
                     }
@@ -540,6 +545,43 @@ fn calls_loop(inner: Arc<Inner>) {
         if inner.gate.sleep(inner.opts.calls_every) {
             return;
         }
+    }
+}
+
+/// How long after answering or dialling from the app its call may become
+/// active and still have its voice moved to this computer.
+const AUDIO_WANTED_FOR: Duration = Duration::from_secs(45);
+
+/// Moves the voice of a call the user answered or placed from this app onto
+/// this computer, so they can talk through it. A call answered on the phone
+/// itself is left alone.
+fn route_audio_here(inner: &Arc<Inner>, address: &str) {
+    let wanted = lock(&inner.audio_wanted)
+        .take()
+        .is_some_and(|at| at.elapsed() < AUDIO_WANTED_FOR);
+    if !wanted {
+        return;
+    }
+    // The audio link may need a moment after the call turns active, so the
+    // retries run on their own short-lived thread: call tracking never waits.
+    let (inner, address) = (inner.clone(), address.to_string());
+    let spawned = thread::Builder::new()
+        .name("gbp-audio".into())
+        .spawn(move || {
+            let mut last = String::new();
+            for attempt in 0..4 {
+                match inner.platform.activate_audio(&address) {
+                    Ok(()) => return,
+                    Err(e) => last = e.to_string(),
+                }
+                if inner.gate.sleep(Duration::from_millis(600 * (attempt + 1))) {
+                    return;
+                }
+            }
+            log::info!("could not move the call audio to this computer: {last}");
+        });
+    if let Err(e) = spawned {
+        log::warn!("cannot start the audio routing thread: {e}");
     }
 }
 
@@ -616,6 +658,10 @@ fn finish_recording(
             path,
             number: number.to_string(),
         }),
+        Err(recording::RecordingError::Empty) => inner.notice(
+            "The call was not recorded: its audio was not on this computer. Answer from this \
+             app, or choose \"Audio on this computer\" during the call.",
+        ),
         Err(e) => inner.notice(format!("The call recording could not be saved: {e}")),
     }
 }
@@ -1000,12 +1046,14 @@ fn command_loop(
                     .platform
                     .dial(&p.address, &n)
                     .map_err(|e| e.to_string())
+                    .inspect(|()| *lock(&inner.audio_wanted) = Some(Instant::now()))
             }),
             Command::Answer(id) => need_phone().and_then(|p| {
                 inner
                     .platform
                     .answer(&p.address, &id)
                     .map_err(|e| e.to_string())
+                    .inspect(|()| *lock(&inner.audio_wanted) = Some(Instant::now()))
             }),
             Command::HangUp(id) => need_phone().and_then(|p| {
                 inner

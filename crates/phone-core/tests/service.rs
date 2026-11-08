@@ -65,6 +65,10 @@ impl Platform for FakePlatform {
     fn send_tones(&self, _: &str, _: &str) -> Result<()> {
         Ok(())
     }
+    fn activate_audio(&self, _: &str) -> Result<()> {
+        self.log.lock().unwrap().push("activate".into());
+        Ok(())
+    }
     fn start_recording(&self, _: &str, dir: &std::path::Path) -> Result<Box<dyn Recorder>> {
         Ok(Box::new(FakeRecorder {
             dir: dir.to_path_buf(),
@@ -457,5 +461,54 @@ fn nothing_is_recorded_unless_the_setting_is_on() {
     while let Ok(e) = rx.try_recv() {
         assert!(!matches!(e, Event::RecordingSaved { .. }));
     }
+    svc.stop();
+}
+
+#[test]
+fn answering_from_the_app_moves_the_audio_here_but_answering_on_the_phone_does_not() {
+    let p = FakePlatform::new();
+    let (svc, rx) = Service::start(p.clone(), fast("audio"));
+    let h = svc.handle();
+    wait_for(&rx, |e| matches!(e, Event::Phone(Some(_))).then_some(()));
+    let call = |id: &str, state| {
+        vec![CallSnapshot {
+            id: id.into(),
+            state,
+            number: "+1".into(),
+            name: None,
+        }]
+    };
+
+    // A call answered on the phone itself: the voice stays on the phone.
+    *p.calls.lock().unwrap() = call("/c1", CallState::Incoming);
+    wait_for(&rx, |e| {
+        matches!(e, Event::Call(CallEvent::Incoming { .. })).then_some(())
+    });
+    *p.calls.lock().unwrap() = call("/c1", CallState::Active);
+    wait_for(&rx, |e| {
+        matches!(
+            e,
+            Event::Call(CallEvent::Changed {
+                state: CallState::Active,
+                ..
+            })
+        )
+        .then_some(())
+    });
+    std::thread::sleep(Duration::from_millis(300));
+    assert!(!p.log.lock().unwrap().contains(&"activate".to_string()));
+    p.calls.lock().unwrap().clear();
+    wait_for(&rx, |e| {
+        matches!(e, Event::Call(CallEvent::Ended { .. })).then_some(())
+    });
+
+    // A call answered from the app: its voice comes to the computer.
+    *p.calls.lock().unwrap() = call("/c2", CallState::Incoming);
+    wait_for(&rx, |e| {
+        matches!(e, Event::Call(CallEvent::Incoming { .. })).then_some(())
+    });
+    h.answer("/c2");
+    *p.calls.lock().unwrap() = call("/c2", CallState::Active);
+    eventually(|| p.log.lock().unwrap().contains(&"activate".to_string()));
     svc.stop();
 }
