@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=GeekBridge Phone
+GenericName=Phone calls and texts
+Comment=Answer calls and read and send texts through your Bluetooth-paired Android phone
+Categories=Utility;Telephony;
+Keywords=phone;call;sms;text;dial;bluetooth;android;geekbridge;
+Icon=dev.geekbridge.Phone
+Exec=geekbridge-phone %u
+Terminal=false
+StartupNotify=true
+StartupWMClass=dev.geekbridge.Phone
+MimeType=x-scheme-handler/tel;
