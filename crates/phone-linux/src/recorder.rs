@@ -68,14 +68,15 @@ fn phone_objects(pw_dump_json: &str, address: &str) -> Option<PhoneObjects> {
             continue;
         }
         nodes.push((name.to_string(), class.to_string()));
-        // A source carries audio out of the phone: the other person's voice.
-        if class.starts_with("Audio/Source") {
-            let rank = if name.starts_with("bluez_input") {
-                0
-            } else {
-                1
-            };
-            sources.push((rank, name.to_string()));
+        // The other person's voice is audio coming out of the phone. PipeWire shows it
+        // as a source in some setups and, in the hands-free gateway role seen on real
+        // phones, as an output *stream* named `bluez_input.<address>.<n>`.
+        let from_phone = name.starts_with("bluez_input")
+            && (class.starts_with("Audio/Source") || class == "Stream/Output/Audio");
+        if from_phone {
+            sources.push((0, name.to_string()));
+        } else if class.starts_with("Audio/Source") {
+            sources.push((1, name.to_string()));
         }
     }
     Some(PhoneObjects { nodes, sources })
@@ -305,6 +306,21 @@ mod tests {
         assert_eq!(
             describe_phone_nodes("x", "AA:BB:CC:DD:EE:FF"),
             "pw-dump output could not be read"
+        );
+    }
+
+    /// What PipeWire really showed during a call with an Android phone (address replaced).
+    #[test]
+    fn finds_the_voice_stream_of_a_real_hands_free_call() {
+        let dump = r#"[
+          {"id": 52, "type": "PipeWire:Interface:Node", "info": {"props": {"media.class": "Midi/Bridge", "node.name": "bluez_midi.server"}}},
+          {"id": 108, "type": "PipeWire:Interface:Node", "info": {"props": {"media.class": "Stream/Output/Audio", "node.name": "bluez_input.AA_BB_CC_DD_EE_FF.0", "api.bluez5.profile": "headset-audio-gateway"}}},
+          {"id": 109, "type": "PipeWire:Interface:Node", "info": {"props": {"media.class": "Stream/Input/Audio", "node.name": "bluez_output.AA_BB_CC_DD_EE_FF.1", "api.bluez5.profile": "headset-audio-gateway"}}}
+        ]"#;
+        // Only the phone-to-computer stream is the other person; the other is our own voice going out.
+        assert_eq!(
+            find_remote_source(dump, "AA:BB:CC:DD:EE:FF").as_deref(),
+            Some("bluez_input.AA_BB_CC_DD_EE_FF.0")
         );
     }
 
