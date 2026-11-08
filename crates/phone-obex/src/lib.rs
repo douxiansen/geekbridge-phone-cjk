@@ -8,8 +8,12 @@
 
 pub mod bmessage;
 pub mod client;
+#[cfg(any(test, feature = "fake"))]
+pub mod fake;
 pub mod map;
 pub mod packet;
+pub mod pbap;
 
 pub use client::{ObexClient, ObexError};
 pub use map::{MapClient, MessageEntry};
+pub use pbap::{Book, PbapClient};

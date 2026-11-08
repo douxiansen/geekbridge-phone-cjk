@@ -9,3 +9,7 @@ rust-version.workspace = true
 [dependencies]
 roxmltree = "0.20"
 thiserror = "2"
+
+[features]
+# A fake phone (OBEX server) for tests in other crates.
+fake = []

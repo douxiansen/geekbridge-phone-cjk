@@ -9,3 +9,6 @@ rust-version.workspace = true
 [dependencies]
 libc = "0.2"
 phone-obex = { path = "../phone-obex" }
+phone-core = { path = "../phone-core" }
+zbus = { version = "5", default-features = false, features = ["blocking-api", "async-io"] }
+log = "0.4"
