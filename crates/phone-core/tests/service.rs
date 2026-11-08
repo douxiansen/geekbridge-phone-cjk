@@ -418,15 +418,12 @@ fn nothing_is_recorded_unless_the_setting_is_on() {
     let (svc, rx) = Service::start(p.clone(), fast("norec"));
     let h = svc.handle();
     wait_for(&rx, |e| matches!(e, Event::Phone(Some(_))).then_some(()));
-    let call = |state| {
-        vec![CallSnapshot {
-            id: "/c1".into(),
-            state,
-            number: "+1".into(),
-            name: None,
-        }]
-    };
-    *p.calls.lock().unwrap() = call(CallState::Active);
+    *p.calls.lock().unwrap() = vec![CallSnapshot {
+        id: "/c1".into(),
+        state: CallState::Active,
+        number: "+1".into(),
+        name: None,
+    }];
     eventually(|| h.state().calls.len() == 1);
     assert!(!h.state().calls[0].recording);
     p.calls.lock().unwrap().clear();
