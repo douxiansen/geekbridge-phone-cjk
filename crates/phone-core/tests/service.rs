@@ -285,3 +285,49 @@ fn failed_command_becomes_a_notice() {
     });
     svc.stop();
 }
+
+#[test]
+fn cache_makes_the_second_start_instant_and_skips_a_fresh_contacts_fetch() {
+    let opts = fast("cache");
+    let paths = opts.paths.clone();
+    {
+        let p = FakePlatform::new();
+        {
+            let mut st = p.server.state.lock().unwrap();
+            st.contacts_vcf = VCF.into();
+            st.inbox.push(msg(
+                "+213550123456",
+                "",
+                "kept in the cache",
+                "20260101T100000Z",
+                true,
+            ));
+        }
+        let (svc, _rx) = Service::start(p, opts);
+        let h = svc.handle();
+        eventually(|| {
+            h.state().contacts_status == LinkStatus::Ready
+                && h.state().conversations.thread("+213550123456").len() == 1
+        });
+        svc.stop();
+    }
+    // Second run: a phone with NO contacts and NO texts. Everything shown
+    // must come from the cache, and contacts must not be refetched (they are fresh).
+    let p2 = FakePlatform::new();
+    let (svc, rx) = Service::start(
+        p2.clone(),
+        Options {
+            paths,
+            ..fast("cache2")
+        },
+    );
+    let h = svc.handle();
+    wait_for(&rx, |e| matches!(e, Event::Phone(Some(_))).then_some(()));
+    assert_eq!(h.state().display_name("0550 12 34 56"), "Alí Boudjemaa");
+    assert_eq!(h.state().conversations.thread("+213550123456").len(), 1);
+    assert_eq!(h.state().contacts_status, LinkStatus::Ready);
+    std::thread::sleep(Duration::from_millis(1500));
+    // Still there: the empty fake phone did not overwrite the cache.
+    assert_eq!(h.state().contacts.len(), 1);
+    svc.stop();
+}

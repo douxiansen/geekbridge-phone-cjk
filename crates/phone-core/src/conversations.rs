@@ -26,7 +26,8 @@ pub struct Message {
 }
 
 impl Message {
-    fn identity(&self) -> String {
+    /// Stable identity of a text: direction, who, when and what.
+    pub fn identity(&self) -> String {
         format!(
             "{}|{}|{}|{}",
             self.incoming,
@@ -104,27 +105,45 @@ fn to_message(e: &MessageEntry, incoming: bool) -> Option<Message> {
     })
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+/// What one merge did.
+#[derive(Debug, Clone, Default)]
+pub struct Ingest {
+    pub changed: bool,
+    pub upserts: Vec<Message>,
+}
+
+#[derive(Debug, Clone, Default)]
 pub struct Conversations {
     stored: Vec<Message>,
-    #[serde(skip)]
     pending: Vec<Message>,
 }
 
 impl Conversations {
+    /// Rebuilds from stored texts (oldest first or any order).
+    pub fn from_messages(stored: Vec<Message>) -> Self {
+        Self {
+            stored,
+            pending: Vec::new(),
+        }
+    }
+
     pub fn is_empty(&self) -> bool {
         self.stored.is_empty()
     }
 
-    /// Merges what the phone lists. Returns true when anything changed.
-    pub fn ingest(&mut self, inbox: &[MessageEntry], sent: &[MessageEntry]) -> bool {
+    /// Merges what the phone lists. `changed` is true when anything visible
+    /// changed; `upserts` are the texts to write to the database (new ones,
+    /// and ones whose read flag turned on).
+    pub fn ingest(&mut self, inbox: &[MessageEntry], sent: &[MessageEntry]) -> Ingest {
         let mut known: HashSet<String> = self.stored.iter().map(Message::identity).collect();
+        let mut upserts = Vec::new();
         let mut changed = false;
         let incoming = inbox.iter().filter_map(|e| to_message(e, true));
         let outgoing = sent.iter().filter_map(|e| to_message(e, false));
         for m in incoming.chain(outgoing) {
             let id = m.identity();
             if known.insert(id.clone()) {
+                upserts.push(m.clone());
                 self.stored.push(m);
                 changed = true;
             } else if m.incoming && m.read {
@@ -132,6 +151,7 @@ impl Conversations {
                 if let Some(s) = self.stored.iter_mut().find(|s| s.identity() == id) {
                     if !s.read {
                         s.read = true;
+                        upserts.push(s.clone());
                         changed = true;
                     }
                 }
@@ -154,7 +174,7 @@ impl Conversations {
             let excess = self.stored.len() - MAX_STORED;
             self.stored.drain(..excess);
         }
-        changed
+        Ingest { changed, upserts }
     }
 
     /// A text sent from here, shown at once until the phone lists it.
@@ -307,8 +327,8 @@ mod tests {
     fn ingest_is_idempotent_and_history_survives_the_phone_dropping_it() {
         let mut c = Conversations::default();
         let inbox = [entry("+1", "", "a", "20260101T100000Z", false)];
-        assert!(c.ingest(&inbox, &[]));
-        assert!(!c.ingest(&inbox, &[]));
+        assert!(c.ingest(&inbox, &[]).changed);
+        assert!(!c.ingest(&inbox, &[]).changed);
         // The phone no longer lists it: we still have it.
         c.ingest(&[], &[]);
         assert_eq!(c.thread("+1").len(), 1);
@@ -319,7 +339,10 @@ mod tests {
         let mut c = Conversations::default();
         c.ingest(&[entry("+1", "", "a", "20260101T100000Z", false)], &[]);
         assert_eq!(c.unread_total(), 1);
-        assert!(c.ingest(&[entry("+1", "", "a", "20260101T100000Z", true)], &[]));
+        assert!(
+            c.ingest(&[entry("+1", "", "a", "20260101T100000Z", true)], &[])
+                .changed
+        );
         assert_eq!(c.unread_total(), 0);
         c.ingest(&[entry("+1", "", "a", "20260101T100000Z", false)], &[]);
         assert_eq!(c.unread_total(), 0);
