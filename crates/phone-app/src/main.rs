@@ -159,6 +159,12 @@ fn main() {
             }
         }
     }
+    // Banners in the top-right corner for calls and texts (falls back to desktop
+    // notifications where the compositor has no layer-shell).
+    #[cfg(target_os = "linux")]
+    {
+        opts.notifier = Some(phone_app::overlay_notifier::factory());
+    }
     #[cfg(not(feature = "demo"))]
     let _ = &mut opts;
     if let Err(e) = phone_app::run(opts) {

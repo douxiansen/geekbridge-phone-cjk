@@ -2551,6 +2551,7 @@ dependencies = [
  "log",
  "phone-core",
  "phone-linux",
+ "phone-overlay",
  "serde",
  "serde_json",
  "tempfile",

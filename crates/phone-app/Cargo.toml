@@ -30,6 +30,7 @@ serde_json = "1"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 phone-linux = { path = "../phone-linux" }
+phone-overlay = { path = "../phone-overlay" }
 zbus = { version = "5", default-features = false, features = ["blocking-api", "async-io"] }
 # Un-minimising our own window on Wayland, where a program cannot do it through the toolkit.
 wayland-client = "0.31"

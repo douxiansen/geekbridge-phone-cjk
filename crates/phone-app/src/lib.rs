@@ -28,6 +28,8 @@ pub mod model;
 pub mod notify;
 #[cfg(target_os = "linux")]
 pub mod notify_freedesktop;
+#[cfg(target_os = "linux")]
+pub mod overlay_notifier;
 pub mod platform_ui;
 pub mod pump;
 #[cfg(target_os = "linux")]
