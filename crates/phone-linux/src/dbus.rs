@@ -170,6 +170,40 @@ pub fn hang_up_all(session: &Connection, address: &str) -> Result<()> {
         .map_err(other)
 }
 
+/// The A2DP *source* service a phone offers: the profile through which its music and videos
+/// reach this computer.
+const A2DP_SOURCE_UUID: &str = "0000110a-0000-1000-8000-00805f9b34fb";
+
+/// Disconnects the phone's media-audio profile, leaving hands-free calls alone. BlueZ answers
+/// with an error when the profile is not connected, which is the normal case and not a failure.
+pub fn block_media_audio(system: &Connection, address: &str) -> Result<()> {
+    let objects = managed(system, BLUEZ, "/")?;
+    let path = objects.iter().find_map(|(path, ifaces)| {
+        let dev = ifaces.get("org.bluez.Device1")?;
+        get_str(dev, "Address")
+            .is_some_and(|a| a.eq_ignore_ascii_case(address))
+            .then(|| path.to_string())
+    });
+    let Some(path) = path else { return Ok(()) };
+    match system.call_method(
+        Some(BLUEZ),
+        path.as_str(),
+        Some("org.bluez.Device1"),
+        "DisconnectProfile",
+        &(A2DP_SOURCE_UUID,),
+    ) {
+        Ok(_) => Ok(()),
+        Err(zbus::Error::MethodError(name, _, _))
+            if name.as_str().ends_with("NotConnected")
+                || name.as_str().ends_with("DoesNotExist")
+                || name.as_str().ends_with("Failed") =>
+        {
+            Ok(())
+        }
+        Err(e) => Err(other(e)),
+    }
+}
+
 /// Asks the gateway to open the audio link to this computer.
 pub fn activate_audio(session: &Connection, address: &str) -> Result<()> {
     let path = gateway_path(session, address)?;

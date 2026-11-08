@@ -46,6 +46,11 @@ pub trait Platform: Send + Sync {
     fn hang_up(&self, address: &str, call_id: &str) -> Result<()>;
     fn hang_up_all(&self, address: &str) -> Result<()>;
     fn send_tones(&self, address: &str, tones: &str) -> Result<()>;
+    /// Stops the phone's media audio (music, video) from playing through this computer,
+    /// leaving the call audio alone. Safe to call repeatedly; the default does nothing.
+    fn block_media_audio(&self, _address: &str) -> Result<()> {
+        Ok(())
+    }
     /// Starts capturing the current call's audio into `dir`. Platforms that
     /// cannot record keep the default.
     fn start_recording(&self, _address: &str, _dir: &std::path::Path) -> Result<Box<dyn Recorder>> {

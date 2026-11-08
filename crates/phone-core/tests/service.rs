@@ -65,6 +65,10 @@ impl Platform for FakePlatform {
     fn send_tones(&self, _: &str, _: &str) -> Result<()> {
         Ok(())
     }
+    fn block_media_audio(&self, _: &str) -> Result<()> {
+        self.log.lock().unwrap().push("block-media".into());
+        Ok(())
+    }
     fn activate_audio(&self, _: &str) -> Result<()> {
         self.log.lock().unwrap().push("activate".into());
         Ok(())
@@ -462,5 +466,50 @@ fn nothing_is_recorded_unless_the_setting_is_on() {
     while let Ok(e) = rx.try_recv() {
         assert!(!matches!(e, Event::RecordingSaved { .. }));
     }
+    svc.stop();
+}
+
+#[test]
+fn the_phones_media_audio_is_kept_off_while_idle_but_not_during_a_call_or_when_switched_off() {
+    let p = FakePlatform::new();
+    let (svc, rx) = Service::start(p.clone(), fast("calls-only"));
+    let h = svc.handle();
+    wait_for(&rx, |e| matches!(e, Event::Phone(Some(_))).then_some(()));
+    let count = |p: &FakePlatform| {
+        p.log
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|l| *l == "block-media")
+            .count()
+    };
+
+    // On by default: the phone is idle, so it is applied again and again.
+    eventually(|| count(&p) >= 3);
+
+    // During a call it is left alone.
+    *p.calls.lock().unwrap() = vec![CallSnapshot {
+        id: "/c1".into(),
+        state: CallState::Active,
+        number: "+1".into(),
+        name: None,
+    }];
+    eventually(|| !h.state().calls.is_empty());
+    std::thread::sleep(Duration::from_millis(200));
+    let during = count(&p);
+    std::thread::sleep(Duration::from_millis(300));
+    assert_eq!(count(&p), during, "no blocking while a call is active");
+    p.calls.lock().unwrap().clear();
+    eventually(|| h.state().calls.is_empty());
+
+    // Switched off: it stops.
+    let mut settings = h.state().settings.clone();
+    settings.calls_audio_only = false;
+    h.set_settings(settings);
+    eventually(|| !h.state().settings.calls_audio_only);
+    std::thread::sleep(Duration::from_millis(200));
+    let off = count(&p);
+    std::thread::sleep(Duration::from_millis(300));
+    assert_eq!(count(&p), off);
     svc.stop();
 }

@@ -155,6 +155,14 @@ impl SettingsState {
             toggle_row(
                 ui,
                 &pal,
+                "Calls only",
+                "Use Bluetooth audio for calls only. Music and videos from the phone do not play on this computer.",
+                &mut s.calls_audio_only,
+            );
+            widgets::card_divider(ui, &pal);
+            toggle_row(
+                ui,
+                &pal,
                 "Record calls",
                 "Save the audio of calls on this computer.",
                 &mut s.record_calls,

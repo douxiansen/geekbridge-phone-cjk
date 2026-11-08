@@ -60,6 +60,9 @@ impl Platform for LinuxPlatform {
             address, dir,
         )?))
     }
+    fn block_media_audio(&self, address: &str) -> Result<()> {
+        dbus::block_media_audio(&self.system, address)
+    }
     fn activate_audio(&self, address: &str) -> Result<()> {
         dbus::activate_audio(&self.session, address)
     }

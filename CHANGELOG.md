@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.1
+
+Calls only: the phone's music and videos no longer play through your computer's speakers. Settings > Calls > Calls only (on by default) keeps the Bluetooth audio link for calls.
+
+- Fix: a rare "text file busy" failure while installing an update.
+- Fix: call state is published before the call events that announce it.
+
 ## 0.1.0
 
 First release, Linux.

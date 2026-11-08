@@ -444,9 +444,28 @@ fn phones_loop(inner: Arc<Inner>) {
                 }
             }
         }
+        keep_calls_only(&inner);
         if inner.gate.sleep(inner.opts.phones_every) {
             return;
         }
+    }
+}
+
+/// With "calls only" on, keeps the phone's media audio (music, video) off this computer. The
+/// phone may reconnect it at any time, so this runs on every pass while no call is going on.
+fn keep_calls_only(inner: &Inner) {
+    let address = {
+        let st = lock(&inner.state);
+        if !st.settings.calls_audio_only || !st.calls.is_empty() {
+            return;
+        }
+        match &st.phone {
+            Some(p) if p.connected => p.address.clone(),
+            _ => return,
+        }
+    };
+    if let Err(e) = inner.platform.block_media_audio(&address) {
+        log::debug!("media audio block: {e}");
     }
 }
 

@@ -33,6 +33,10 @@ pub struct Settings {
     /// Look for a newer release on GitHub now and then (about once a day). This is the only
     /// network access the app makes.
     pub check_updates: bool,
+    /// Use the Bluetooth audio link for calls only: the phone's music, videos and other media
+    /// are not played through this computer. A phone otherwise treats the computer as a
+    /// Bluetooth speaker as soon as they are paired.
+    pub calls_audio_only: bool,
     /// Record calls to audio files. Off by default: recording a call needs
     /// the other person's consent in many places.
     pub record_calls: bool,
@@ -56,6 +60,7 @@ impl Default for Settings {
             load_contacts_on_connect: true,
             inbox_poll_secs: 5,
             check_updates: true,
+            calls_audio_only: true,
             record_calls: false,
             recordings_dir: None,
         }
