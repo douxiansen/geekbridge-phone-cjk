@@ -87,6 +87,9 @@ pub struct App {
     applied_theme: Option<ThemePref>,
     #[cfg(feature = "demo")]
     demo: Option<crate::demo::DemoControl>,
+    /// Demo: draw calls as being recorded.
+    #[cfg(feature = "demo")]
+    demo_fake_recording: bool,
     /// Demo screenshots: moves through the screens by itself.
     #[cfg(feature = "demo")]
     tour: Option<(Instant, usize)>,
@@ -186,6 +189,8 @@ impl App {
             pending_minimise: boot.start_minimised,
             theme_override: boot.theme,
             applied_theme: None,
+            #[cfg(feature = "demo")]
+            demo_fake_recording: boot.demo_scene == Some(crate::demo::Scene::Recording),
             #[cfg(feature = "demo")]
             demo: boot.demo,
             #[cfg(feature = "demo")]
@@ -413,7 +418,14 @@ impl App {
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let now_instant = Instant::now();
-        let live = Live::read(&self.handle);
+        #[allow(unused_mut)]
+        let mut live = Live::read(&self.handle);
+        #[cfg(feature = "demo")]
+        if self.demo_fake_recording {
+            for call in live.calls.iter_mut().filter(|c| c.is_active()) {
+                call.recording = true;
+            }
+        }
         if std::mem::take(&mut self.pending_minimise) {
             ctx.send_viewport_cmd(ViewportCommand::Minimized(true));
         }

@@ -2,6 +2,7 @@
 //! What an operating system must provide.
 
 use crate::calls::CallSnapshot;
+use crate::recording::Recorder;
 use std::io::{Read, Write};
 
 /// A byte stream to a service on the phone (an RFCOMM socket).
@@ -45,6 +46,13 @@ pub trait Platform: Send + Sync {
     fn hang_up(&self, address: &str, call_id: &str) -> Result<()>;
     fn hang_up_all(&self, address: &str) -> Result<()>;
     fn send_tones(&self, address: &str, tones: &str) -> Result<()>;
+    /// Starts capturing the current call's audio into `dir`. Platforms that
+    /// cannot record keep the default.
+    fn start_recording(&self, _address: &str, _dir: &std::path::Path) -> Result<Box<dyn Recorder>> {
+        Err(PlatformError::Other(
+            "call recording is not supported on this system".into(),
+        ))
+    }
     /// Moves the call's voice onto this computer's speakers and microphone.
     /// Platforms whose system does this by itself keep the default.
     fn activate_audio(&self, _address: &str) -> Result<()> {

@@ -228,6 +228,7 @@ mod tests {
                 number: "+1".into(),
                 name: None,
                 since: None,
+                recording: false,
             },
             recording,
         }

@@ -29,6 +29,8 @@ pub enum Scene {
     Denied,
     /// The phone is paired but not connected.
     Offline,
+    /// A running call, drawn as if it were being recorded (the fake phone cannot record).
+    Recording,
 }
 
 impl Scene {
@@ -41,6 +43,7 @@ impl Scene {
             "text" => Scene::Text,
             "denied" => Scene::Denied,
             "offline" => Scene::Offline,
+            "recording" => Scene::Recording,
             _ => return None,
         })
     }
@@ -148,7 +151,7 @@ impl DemoControl {
                     Scene::Ring => control.ring(KNOWN_NUMBER),
                     Scene::RingUnknown => control.ring(UNKNOWN_NUMBER),
                     Scene::Dialing => handle.dial("+33612345678"),
-                    Scene::Active => {
+                    Scene::Active | Scene::Recording => {
                         control.ring(KNOWN_NUMBER);
                         std::thread::sleep(Duration::from_millis(1500));
                         handle.answer("/demo/call1");

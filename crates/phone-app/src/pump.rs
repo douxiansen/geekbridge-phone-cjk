@@ -256,6 +256,7 @@ mod tests {
             number: "+213550123456".into(),
             name: Some("Alí".into()),
             since: (state == CallState::Active).then(Instant::now),
+            recording: false,
         }
     }
 

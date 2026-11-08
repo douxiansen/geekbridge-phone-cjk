@@ -18,8 +18,7 @@ use std::time::Instant;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CallView {
     pub call: ActiveCall,
-    /// The call is being recorded. The service does not report this yet, so it is always false;
-    /// the card already draws the indicator.
+    /// The call is being recorded (the service says so); the card draws a red dot and "REC".
     pub recording: bool,
 }
 
@@ -61,9 +60,9 @@ impl Live {
                 .calls
                 .iter()
                 .cloned()
-                .map(|call| CallView {
-                    call,
-                    recording: false,
+                .map(|call| {
+                    let recording = call.recording;
+                    CallView { call, recording }
                 })
                 .collect(),
             contacts_status: st.contacts_status.clone(),
@@ -236,6 +235,7 @@ mod tests {
                 number: "1".into(),
                 name: None,
                 since: None,
+                recording: false,
             },
             recording: false,
         };

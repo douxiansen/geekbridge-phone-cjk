@@ -43,7 +43,9 @@ A pure OBEX client over any `Read + Write` stream: packet codec, connect / set-p
 4. **contacts**: pulls the phonebook and call history over PBAP when a phone connects, or on request.
 5. **commands**: dispatches UI commands (dial, answer, hang up, send text, settings).
 
-The UI reads `State` under a short lock and receives `Event`s on a channel. History is cached per phone so it grows beyond what the phone lists at once.
+The UI reads `State` under a short lock and receives `Event`s on a channel. Contacts, texts and call history are cached per phone in SQLite (`db.rs`): startup reads the cache, writes are incremental, contacts are refetched only when older than 12 hours, and after the first deep listing the inbox is polled for just the newest messages. History therefore grows beyond what the phone lists at once.
+
+Call recording: when enabled, the calls thread starts a `Recorder` (platform-provided) as a call becomes active and, when it ends, mixes the two captured sides into one stereo WAV (`recording.rs`).
 
 ## Platform trait
 

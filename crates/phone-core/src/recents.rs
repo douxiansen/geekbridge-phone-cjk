@@ -45,7 +45,15 @@ impl Recents {
         &self.entries
     }
 
-    pub fn add(&mut self, entry: Recent) {
+    /// Rebuilds from stored entries.
+    pub fn from_entries(mut entries: Vec<Recent>) -> Self {
+        entries.sort_by_key(|e| std::cmp::Reverse(e.at));
+        entries.truncate(MAX_ENTRIES);
+        Self { entries }
+    }
+
+    /// Adds a call; false when it was already there (same number, kind and minute).
+    pub fn add(&mut self, entry: Recent) -> bool {
         // The same call can arrive from the live tracker and from the phone's
         // history: treat the same number, kind and minute as one call.
         let dup = self.entries.iter().any(|e| {
@@ -54,11 +62,12 @@ impl Recents {
                 && (e.at - entry.at).abs() < 90
         });
         if dup {
-            return;
+            return false;
         }
         self.entries.push(entry);
         self.entries.sort_by_key(|e| std::cmp::Reverse(e.at));
         self.entries.truncate(MAX_ENTRIES);
+        true
     }
 
     pub fn len(&self) -> usize {

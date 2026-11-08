@@ -7,10 +7,12 @@
 //! and call history), and a command dispatcher.
 
 use crate::calls::{CallEvent, CallSnapshot, CallState, CallTracker};
-use crate::contacts::{Contact, ContactBook};
+use crate::contacts::ContactBook;
 use crate::conversations::{parse_map_time, Conversations, InboxWatcher, Message};
+use crate::db::Db;
 use crate::platform::{PhoneInfo, Platform};
 use crate::recents::{Kind, Recent, Recents};
+use crate::recording::{self, Recorder};
 use crate::settings::Settings;
 use crate::store::{self, Paths};
 use crate::vcard;
@@ -44,6 +46,8 @@ pub struct ActiveCall {
     pub name: Option<String>,
     /// When it became active, for the timer.
     pub since: Option<Instant>,
+    /// The call is being recorded.
+    pub recording: bool,
 }
 
 /// Everything the UI reads. Lock it briefly and copy what you need.
@@ -84,6 +88,11 @@ pub enum Event {
         token: u64,
         number: String,
         result: Result<(), String>,
+    },
+    /// A recorded call was saved.
+    RecordingSaved {
+        path: std::path::PathBuf,
+        number: String,
     },
     /// Something the user should know, in a sentence.
     Notice(String),
@@ -169,6 +178,7 @@ struct Inner {
     platform: Arc<dyn Platform>,
     opts: Options,
     state: Mutex<State>,
+    db: Db,
     events: Sender<Event>,
     gate: Gate,
     cmd: Sender<Command>,
@@ -188,13 +198,6 @@ impl Inner {
         let msg = msg.into();
         log::warn!("{msg}");
         self.emit(Event::Notice(msg));
-    }
-    fn phone_dir(&self, address: &str) -> PathBuf {
-        self.opts
-            .paths
-            .data
-            .join("phones")
-            .join(address.replace(':', "_"))
     }
     fn settings_path(&self) -> PathBuf {
         self.opts.paths.config.join("settings.json")
@@ -278,6 +281,12 @@ impl Service {
         let (cmd_tx, cmd_rx) = mpsc::channel();
         let settings: Settings =
             store::load::<Settings>(&opts.paths.config.join("settings.json")).sanitised();
+        // A cache that cannot be opened must not stop the app: fall back to
+        // memory (everything is simply fetched again next run).
+        let db = Db::open(&opts.paths.data.join("cache.db")).unwrap_or_else(|e| {
+            log::warn!("cannot open the cache database ({e}); using memory only");
+            Db::open_in_memory().expect("in-memory SQLite")
+        });
         let inner = Arc::new(Inner {
             platform,
             opts,
@@ -285,6 +294,7 @@ impl Service {
                 settings,
                 ..State::default()
             }),
+            db,
             events: events_tx,
             gate: Gate {
                 stopped: Mutex::new(false),
@@ -369,14 +379,20 @@ impl Drop for Service {
 // --- phones ---------------------------------------------------------------
 
 fn load_phone_data(inner: &Inner, address: &str) {
-    let dir = inner.phone_dir(address);
-    let contacts: Vec<Contact> = store::load(&dir.join("contacts.json"));
-    let conversations: Conversations = store::load(&dir.join("conversations.json"));
-    let recents: Recents = store::load(&dir.join("recents.json"));
+    let contacts = inner.db.load_contacts(address).unwrap_or_default();
+    let messages = inner.db.load_messages(address).unwrap_or_default();
+    let recents = inner.db.load_recents(address).unwrap_or_default();
     let mut st = lock(&inner.state);
+    // Cached contacts show at once; the contacts thread decides from their
+    // age whether to refresh them.
+    st.contacts_status = if contacts.is_empty() {
+        LinkStatus::Idle
+    } else {
+        LinkStatus::Ready
+    };
     st.contacts = ContactBook::from_contacts(contacts);
-    st.conversations = conversations;
-    st.recents = recents;
+    st.conversations = Conversations::from_messages(messages);
+    st.recents = Recents::from_entries(recents);
 }
 
 fn phones_loop(inner: Arc<Inner>) {
@@ -438,6 +454,7 @@ fn calls_loop(inner: Arc<Inner>) {
     let mut tracker = CallTracker::new();
     let mut shown: Vec<ActiveCall> = Vec::new();
     let mut warned = false;
+    let mut recorders: HashMap<String, (Box<dyn Recorder>, PathBuf)> = HashMap::new();
     loop {
         if let Some(phone) = inner.selected_connected() {
             match inner.platform.calls(&phone.address) {
@@ -456,8 +473,27 @@ fn calls_loop(inner: Arc<Inner>) {
                             since.insert(id.clone(), *ms);
                         }
                     }
-                    let next = build_calls(&inner, &snaps, &shown, &since, started);
+                    for e in &events {
+                        if let CallEvent::Changed {
+                            id,
+                            state: CallState::Active,
+                            ..
+                        } = e
+                        {
+                            start_recording(&inner, &phone.address, id, &mut recorders);
+                        }
+                    }
+                    let next = build_calls(&inner, &snaps, &shown, &since, started, &recorders);
                     for e in events {
+                        if let CallEvent::Ended {
+                            id,
+                            number,
+                            direction,
+                            ..
+                        } = &e
+                        {
+                            finish_recording(&inner, id, number, direction, &mut recorders);
+                        }
                         if let CallEvent::Ended {
                             number,
                             direction,
@@ -465,18 +501,18 @@ fn calls_loop(inner: Arc<Inner>) {
                             ..
                         } = &e
                         {
-                            let mut st = lock(&inner.state);
-                            st.recents.add(Recent {
+                            let entry = Recent {
                                 number: number.clone(),
                                 kind: Kind::from(direction),
                                 at: unix_now(),
                                 seconds: *seconds,
-                            });
-                            let _ = store::save(
-                                &inner.phone_dir(&phone.address).join("recents.json"),
-                                &st.recents,
-                            );
-                            drop(st);
+                            };
+                            let added = lock(&inner.state).recents.add(entry.clone());
+                            if added {
+                                if let Err(e) = inner.db.upsert_recents(&phone.address, &[entry]) {
+                                    log::warn!("cannot save call history: {e}");
+                                }
+                            }
                             inner.emit(Event::RecentsChanged);
                         }
                         inner.emit(Event::Call(e));
@@ -507,12 +543,90 @@ fn calls_loop(inner: Arc<Inner>) {
     }
 }
 
+/// Starts recording a call that just became active, when the user wants that.
+fn start_recording(
+    inner: &Inner,
+    address: &str,
+    id: &str,
+    recorders: &mut HashMap<String, (Box<dyn Recorder>, PathBuf)>,
+) {
+    if recorders.contains_key(id) || !inner.settings().record_calls {
+        return;
+    }
+    let tmp = inner
+        .opts
+        .paths
+        .data
+        .join("recording-tmp")
+        .join(id.replace(['/', ':'], "_"));
+    if let Err(e) = std::fs::create_dir_all(&tmp) {
+        inner.notice(format!("Cannot record the call: {e}"));
+        return;
+    }
+    match inner.platform.start_recording(address, &tmp) {
+        Ok(r) => {
+            recorders.insert(id.to_string(), (r, tmp));
+        }
+        Err(e) => {
+            inner.notice(format!("Cannot record the call: {e}"));
+            let _ = std::fs::remove_dir_all(&tmp);
+        }
+    }
+}
+
+/// Stops a call's recording and saves it as one file.
+fn finish_recording(
+    inner: &Inner,
+    id: &str,
+    number: &str,
+    direction: &crate::calls::Direction,
+    recorders: &mut HashMap<String, (Box<dyn Recorder>, PathBuf)>,
+) {
+    let Some((recorder, tmp)) = recorders.remove(id) else {
+        return;
+    };
+    let result = recorder.finish().and_then(|audio| {
+        let (who, dir) = {
+            let st = lock(&inner.state);
+            let dir = st
+                .settings
+                .recordings_dir
+                .as_deref()
+                .filter(|d| !d.trim().is_empty())
+                .map_or_else(recording::default_dir, PathBuf::from);
+            (st.contacts.display(number), dir)
+        };
+        let kind = match direction {
+            crate::calls::Direction::Incoming => "incoming",
+            crate::calls::Direction::Outgoing => "outgoing",
+            crate::calls::Direction::Missed => "missed",
+        };
+        let stem = recording::file_stem(&who, kind, unix_now());
+        let mut out = dir.join(format!("{stem}.wav"));
+        let mut n = 2;
+        while out.exists() {
+            out = dir.join(format!("{stem} {n}.wav"));
+            n += 1;
+        }
+        recording::mix_stereo(&audio, &out).map(|()| out)
+    });
+    let _ = std::fs::remove_dir_all(&tmp);
+    match result {
+        Ok(path) => inner.emit(Event::RecordingSaved {
+            path,
+            number: number.to_string(),
+        }),
+        Err(e) => inner.notice(format!("The call recording could not be saved: {e}")),
+    }
+}
+
 fn build_calls(
     inner: &Inner,
     snaps: &[CallSnapshot],
     previous: &[ActiveCall],
     since: &HashMap<String, u64>,
     started: Instant,
+    recorders: &HashMap<String, (Box<dyn Recorder>, PathBuf)>,
 ) -> Vec<ActiveCall> {
     let st = lock(&inner.state);
     snaps
@@ -531,6 +645,7 @@ fn build_calls(
                     .clone()
                     .or_else(|| st.contacts.name_for(&s.number).map(str::to_string)),
                 since: kept.or(from_event),
+                recording: recorders.contains_key(&s.id),
             }
         })
         .collect()
@@ -552,6 +667,7 @@ fn messages_loop(inner: Arc<Inner>, rx: Receiver<(u64, String, String)>) {
     let mut next_attempt = Instant::now();
     let mut next_poll = Instant::now();
     let mut told_denied = false;
+    let mut deep = true;
 
     let set_status = |s: LinkStatus| {
         let mut st = lock(&inner.state);
@@ -624,6 +740,7 @@ fn messages_loop(inner: Arc<Inner>, rx: Receiver<(u64, String, String)>) {
                     set_status(LinkStatus::Ready);
                     backoff = inner.opts.reconnect_min;
                     told_denied = false;
+                    deep = true;
                     next_poll = Instant::now();
                     if watcher
                         .as_ref()
@@ -692,7 +809,8 @@ fn messages_loop(inner: Arc<Inner>, rx: Receiver<(u64, String, String)>) {
             let every = Duration::from_secs(u64::from(inner.settings().inbox_poll_secs));
             next_poll = Instant::now() + every;
             let Some(l) = link.as_mut() else { continue };
-            match poll_once(&mut l.map) {
+            let deep_now = std::mem::replace(&mut deep, false);
+            match poll_once(&mut l.map, deep_now) {
                 Ok((inbox, sent)) => {
                     let (changed, fresh) = {
                         let mut st = lock(&inner.state);
@@ -700,13 +818,12 @@ fn messages_loop(inner: Arc<Inner>, rx: Receiver<(u64, String, String)>) {
                             .as_mut()
                             .map(|(_, w)| w.take_new(&inbox))
                             .unwrap_or_default();
-                        let mut changed = st.conversations.ingest(&inbox, &sent);
+                        let ingest = st.conversations.ingest(&inbox, &sent);
+                        let mut changed = ingest.changed;
                         changed |= st.conversations.expire_pending(unix_now());
-                        if changed {
-                            let _ = store::save(
-                                &inner.phone_dir(&phone.address).join("conversations.json"),
-                                &st.conversations,
-                            );
+                        drop(st);
+                        if let Err(e) = inner.db.upsert_messages(&phone.address, &ingest.upserts) {
+                            log::warn!("cannot save texts: {e}");
                         }
                         (changed, fresh)
                     };
@@ -730,17 +847,24 @@ fn messages_loop(inner: Arc<Inner>, rx: Receiver<(u64, String, String)>) {
     }
 }
 
+/// The first look after connecting reads deeply; later ones only the newest
+/// texts, since older ones do not change.
 fn poll_once(
     map: &mut MapSession,
+    deep: bool,
 ) -> Result<(Vec<phone_obex::MessageEntry>, Vec<phone_obex::MessageEntry>), phone_obex::ObexError> {
     map.set_folder("/telecom/msg/inbox")?;
-    let inbox = map.list_messages(100, 255)?;
+    let count = if deep { 100 } else { 20 };
+    let inbox = map.list_messages(count, 255)?;
     map.set_folder("/telecom/msg/sent")?;
-    let sent = map.list_messages(100, 255)?;
+    let sent = map.list_messages(count, 255)?;
     Ok((inbox, sent))
 }
 
 // --- contacts -------------------------------------------------------------
+
+/// Contacts newer than this are not fetched again on connect.
+const CONTACTS_MAX_AGE_SECS: i64 = 12 * 3600;
 
 fn pull_contacts(inner: &Inner, address: &str) -> Result<(), String> {
     let stream = inner
@@ -781,14 +905,23 @@ fn pull_contacts(inner: &Inner, address: &str) -> Result<(), String> {
     }
     let _ = pbap.close();
 
-    let dir = inner.phone_dir(address);
-    let mut st = lock(&inner.state);
-    let _ = store::save(&dir.join("contacts.json"), &book.contacts().to_vec());
-    st.contacts = book;
-    for h in history {
-        st.recents.add(h);
+    if let Err(e) = inner
+        .db
+        .replace_contacts(address, book.contacts(), unix_now())
+    {
+        log::warn!("cannot save contacts: {e}");
     }
-    let _ = store::save(&dir.join("recents.json"), &st.recents);
+    let added: Vec<Recent> = {
+        let mut st = lock(&inner.state);
+        st.contacts = book;
+        history
+            .into_iter()
+            .filter(|h| st.recents.add(h.clone()))
+            .collect()
+    };
+    if let Err(e) = inner.db.upsert_recents(address, &added) {
+        log::warn!("cannot save call history: {e}");
+    }
     Ok(())
 }
 
@@ -806,8 +939,17 @@ fn contacts_loop(inner: Arc<Inner>, rx: Receiver<()>) {
             continue;
         };
         let settings = inner.settings();
+        // A fresh cache is enough: only a stale or empty one is refetched on
+        // connect (the Reload button always refetches).
+        let fresh = inner
+            .db
+            .contacts_fetched_at(&phone.address)
+            .ok()
+            .flatten()
+            .is_some_and(|t| unix_now() - t < CONTACTS_MAX_AGE_SECS);
         let due = loaded_for.as_deref() != Some(phone.address.as_str())
-            && settings.load_contacts_on_connect;
+            && settings.load_contacts_on_connect
+            && !fresh;
         let retry_wait = Duration::from_secs(10 * 2u64.pow(failures.min(5)));
         if !(requested || (due && last_try.elapsed() >= retry_wait)) {
             continue;

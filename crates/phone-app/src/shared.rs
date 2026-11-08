@@ -95,6 +95,10 @@ impl Shared {
                     push_capped(&mut q.notices, text.clone());
                 }
             }
+            Event::RecordingSaved { path, .. } => {
+                let text = format!("Call recording saved: {}", crate::platform_ui::tilde(path));
+                push_capped(&mut self.queues().notices, text);
+            }
             Event::Call(_) | Event::CallsChanged => {}
         }
     }
@@ -183,6 +187,19 @@ mod tests {
             vec!["No phone is connected.".to_string(), "Other".to_string()]
         );
         assert!(s.take_notices().is_empty());
+    }
+
+    #[test]
+    fn a_saved_recording_becomes_a_notice_with_its_place() {
+        let s = Shared::default();
+        s.apply(&Event::RecordingSaved {
+            path: std::path::PathBuf::from("/srv/calls/ali.wav"),
+            number: "+1".into(),
+        });
+        assert_eq!(
+            s.take_notices(),
+            vec!["Call recording saved: /srv/calls/ali.wav".to_string()]
+        );
     }
 
     #[test]

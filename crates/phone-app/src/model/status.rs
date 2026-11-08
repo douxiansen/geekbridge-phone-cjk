@@ -186,6 +186,7 @@ mod tests {
             number: number.into(),
             name: name.map(str::to_string),
             since: None,
+            recording: false,
         }
     }
 
