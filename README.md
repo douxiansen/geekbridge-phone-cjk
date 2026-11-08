@@ -48,6 +48,17 @@ cargo build --release -p phone-app
 
 Uninstall with `./scripts/install.sh --uninstall` (your data is kept in `~/.local/share/geekbridge-phone`).
 
+## iPhone
+
+An iPhone works the same way, as a "car kit", verified on a real iPhone. After pairing, open **Settings > Bluetooth**, tap the **ⓘ** next to your computer and switch on **Show Notifications** (texts) and **Sync Contacts**. Then:
+
+| | iPhone |
+| --- | --- |
+| Calls: banner, Answer, Decline, Hang up, talk through the computer | Works |
+| Contacts and call history | Works (needs Sync Contacts) |
+| Reading texts | Works (needs Show Notifications); iMessages look like SMS |
+| Sending texts | Not verified: Apple lets cars send texts only by voice, so expect it to be refused |
+
 ## Using it
 
 1. Pair the phone in your system's Bluetooth settings.
