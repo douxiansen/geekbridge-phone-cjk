@@ -36,6 +36,7 @@ impl Platform for FakePlatform {
             name: "Test Phone".into(),
             connected: *self.connected.lock().unwrap(),
             battery: Some(77),
+            apple: false,
         }])
     }
     fn open_map(&self, _: &str) -> Result<Box<dyn Stream>> {

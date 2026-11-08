@@ -63,6 +63,10 @@ pub struct State {
     pub messages_status: LinkStatus,
     pub recents: Recents,
     pub settings: Settings,
+    /// The name phones see for this computer over Bluetooth.
+    pub computer_name: Option<String>,
+    /// The phone's hands-free link is up, so calls can be controlled from here.
+    pub calls_ready: bool,
 }
 
 impl State {
@@ -400,6 +404,7 @@ fn load_phone_data(inner: &Inner, address: &str) {
 
 fn phones_loop(inner: Arc<Inner>) {
     let mut warned = false;
+    lock(&inner.state).computer_name = inner.platform.computer_name();
     loop {
         match inner.platform.phones() {
             Ok(list) => {
@@ -482,6 +487,7 @@ fn calls_loop(inner: Arc<Inner>) {
             match inner.platform.calls(&phone.address) {
                 Ok(snaps) => {
                     warned = false;
+                    lock(&inner.state).calls_ready = true;
                     let now_ms = started.elapsed().as_millis() as u64;
                     let events = tracker.ingest(&snaps, now_ms);
                     let mut since: HashMap<String, u64> = HashMap::new();
@@ -551,12 +557,21 @@ fn calls_loop(inner: Arc<Inner>) {
                     }
                 }
                 Err(e) => {
+                    lock(&inner.state).calls_ready = false;
                     // No hands-free link yet is normal; say it once.
                     if !warned {
                         log::info!("calls unavailable: {e}");
                         warned = true;
                     }
                 }
+            }
+        } else if lock(&inner.state).calls_ready {
+            lock(&inner.state).calls_ready = false;
+            if !shown.is_empty() {
+                shown.clear();
+                lock(&inner.state).calls.clear();
+                tracker = CallTracker::new();
+                inner.emit(Event::CallsChanged);
             }
         } else if !shown.is_empty() {
             shown.clear();

@@ -31,6 +31,9 @@ impl Platform for LinuxPlatform {
     fn phones(&self) -> Result<Vec<PhoneInfo>> {
         dbus::phones(&self.system)
     }
+    fn computer_name(&self) -> Option<String> {
+        dbus::computer_name(&self.system)
+    }
     fn open_map(&self, address: &str) -> Result<Box<dyn Stream>> {
         self.open(address, sdp::service::MAP_MAS)
     }

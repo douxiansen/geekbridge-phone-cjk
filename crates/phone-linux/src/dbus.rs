@@ -73,6 +73,9 @@ pub fn phones(system: &Connection) -> Result<Vec<PhoneInfo>> {
             .get("org.bluez.Battery1")
             .and_then(|b| b.get("Percentage"))
             .and_then(|v| u8::try_from(v.clone()).ok());
+        // Apple's Bluetooth vendor id is 0x004C: the device's Modalias reads `bluetooth:v004C…`.
+        let apple = get_str(dev, "Modalias")
+            .is_some_and(|m| m.to_ascii_lowercase().starts_with("bluetooth:v004c"));
         out.push(PhoneInfo {
             name: get_str(dev, "Alias")
                 .or_else(|| get_str(dev, "Name"))
@@ -80,6 +83,7 @@ pub fn phones(system: &Connection) -> Result<Vec<PhoneInfo>> {
             address,
             connected: get_bool(dev, "Connected"),
             battery,
+            apple,
         });
     }
     out.sort_by(|a, b| {
@@ -88,6 +92,15 @@ pub fn phones(system: &Connection) -> Result<Vec<PhoneInfo>> {
             .then_with(|| a.name.cmp(&b.name))
     });
     Ok(out)
+}
+
+/// The name this computer shows to phones: the Bluetooth adapter's alias.
+pub fn computer_name(system: &Connection) -> Option<String> {
+    let objects = managed(system, BLUEZ, "/").ok()?;
+    objects.values().find_map(|ifaces| {
+        let adapter = ifaces.get("org.bluez.Adapter1")?;
+        get_str(adapter, "Alias").or_else(|| get_str(adapter, "Name"))
+    })
 }
 
 /// The audio-gateway object path for the phone at `address`.

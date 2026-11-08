@@ -28,6 +28,9 @@ pub struct PhoneInfo {
     pub name: String,
     pub connected: bool,
     pub battery: Option<u8>,
+    /// An Apple phone (iPhone). Apple phones share contacts and texts only after the user
+    /// switches it on in the phone's Bluetooth settings, so the app guides that setup.
+    pub apple: bool,
 }
 
 /// The per-OS half of the app: finding phones, opening the message and
@@ -39,6 +42,11 @@ pub trait Platform: Send + Sync {
     fn open_map(&self, address: &str) -> Result<Box<dyn Stream>>;
     /// A stream to the phone's phonebook service.
     fn open_pbap(&self, address: &str) -> Result<Box<dyn Stream>>;
+    /// The name this computer shows to phones over Bluetooth (what the user looks for in the
+    /// phone's Bluetooth list), when the platform knows it.
+    fn computer_name(&self) -> Option<String> {
+        None
+    }
     /// Calls the phone has right now.
     fn calls(&self, address: &str) -> Result<Vec<CallSnapshot>>;
     fn dial(&self, address: &str, number: &str) -> Result<()>;

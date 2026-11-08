@@ -20,6 +20,9 @@ pub struct DemoPlatform {
     pub server: FakePhoneServer,
     calls: Mutex<Vec<CallSnapshot>>,
     pub connected: Mutex<bool>,
+    apple: bool,
+    /// Whether the phone's hands-free link is up (calls can be controlled).
+    pub hands_free: Mutex<bool>,
 }
 
 fn now_stamp(offset_secs: i64) -> String {
@@ -29,6 +32,25 @@ fn now_stamp(offset_secs: i64) -> String {
 
 impl DemoPlatform {
     pub fn new() -> Arc<Self> {
+        Self::build(false)
+    }
+
+    /// A demo iPhone that has not been set up yet: message access is refused and the phone shares
+    /// no contacts, and the hands-free link is down. Use [`DemoPlatform::allow_messages`],
+    /// [`DemoPlatform::share_contacts`] and [`DemoPlatform::connect_hands_free`] to play the setup
+    /// steps and watch the app notice each one.
+    pub fn new_iphone() -> Arc<Self> {
+        let p = Self::build(true);
+        {
+            let mut st = p.server.state.lock().unwrap();
+            st.refuse_with = Some(0xC3);
+            st.contacts_vcf = String::new();
+        }
+        *p.hands_free.lock().unwrap() = false;
+        p
+    }
+
+    fn build(apple: bool) -> Arc<Self> {
         let server = FakePhoneServer::new();
         {
             let mut st = server.state.lock().unwrap();
@@ -88,7 +110,24 @@ impl DemoPlatform {
             server,
             calls: Mutex::new(vec![]),
             connected: Mutex::new(true),
+            apple,
+            hands_free: Mutex::new(true),
         })
+    }
+
+    /// The user switched on *Show Notifications* on the iPhone.
+    pub fn allow_messages(&self) {
+        self.server.state.lock().unwrap().refuse_with = None;
+    }
+
+    /// The user switched on *Sync Contacts* on the iPhone.
+    pub fn share_contacts(&self) {
+        self.server.state.lock().unwrap().contacts_vcf = CONTACTS.into();
+    }
+
+    /// The iPhone opened its hands-free link.
+    pub fn connect_hands_free(&self) {
+        *self.hands_free.lock().unwrap() = true;
     }
 
     /// Makes the phone ring.
@@ -124,9 +163,10 @@ impl Platform for DemoPlatform {
     fn phones(&self) -> Result<Vec<PhoneInfo>> {
         Ok(vec![PhoneInfo {
             address: "DE:MO:00:00:00:01".into(),
-            name: "Demo Phone".into(),
+            name: if self.apple { "iPhone" } else { "Demo Phone" }.into(),
             connected: *self.connected.lock().unwrap(),
             battery: Some(82),
+            apple: self.apple,
         }])
     }
     fn open_map(&self, _: &str) -> Result<Box<dyn Stream>> {
@@ -135,7 +175,13 @@ impl Platform for DemoPlatform {
     fn open_pbap(&self, _: &str) -> Result<Box<dyn Stream>> {
         Ok(Box::new(self.server.connection()))
     }
+    fn computer_name(&self) -> Option<String> {
+        Some("my-laptop".into())
+    }
     fn calls(&self, _: &str) -> Result<Vec<CallSnapshot>> {
+        if !*self.hands_free.lock().unwrap() {
+            return Err(PlatformError::Other("no hands-free link".into()));
+        }
         Ok(self.calls.lock().unwrap().clone())
     }
     fn dial(&self, _: &str, number: &str) -> Result<()> {

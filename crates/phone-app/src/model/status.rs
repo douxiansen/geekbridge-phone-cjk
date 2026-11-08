@@ -176,6 +176,7 @@ mod tests {
             name: "Pixel".into(),
             connected,
             battery,
+            apple: false,
         }
     }
 
