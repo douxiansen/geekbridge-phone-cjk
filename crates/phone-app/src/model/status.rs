@@ -29,7 +29,12 @@ pub struct PhoneChip {
 /// Summarises the selected phone and its message link.
 pub fn phone_chip(phone: Option<&PhoneInfo>, messages: &LinkStatus) -> PhoneChip {
     let Some(phone) = phone else {
-        return PhoneChip { name: "No phone".into(), dot: Dot::Red, status: "Pair a phone in Bluetooth settings".into(), battery: None };
+        return PhoneChip {
+            name: "No phone".into(),
+            dot: Dot::Red,
+            status: "Pair a phone in Bluetooth settings".into(),
+            battery: None,
+        };
     };
     let (dot, status) = if !phone.connected {
         (Dot::Red, "Not connected")
@@ -41,7 +46,12 @@ pub fn phone_chip(phone: Option<&PhoneInfo>, messages: &LinkStatus) -> PhoneChip
             LinkStatus::Failed(_) => (Dot::Red, "Messages offline"),
         }
     };
-    PhoneChip { name: phone.name.clone(), dot, status: status.into(), battery: phone.battery.filter(|b| *b <= 100) }
+    PhoneChip {
+        name: phone.name.clone(),
+        dot,
+        status: status.into(),
+        battery: phone.battery.filter(|b| *b <= 100),
+    }
 }
 
 /// The short upper-case line on the toolbar's dot-matrix display.
@@ -106,7 +116,11 @@ impl Problem {
 
 /// The link problems worth a banner right now. Nothing is reported while no phone is connected:
 /// the phone chip already says so.
-pub fn problems(phone: Option<&PhoneInfo>, messages: &LinkStatus, contacts: &LinkStatus) -> Vec<Problem> {
+pub fn problems(
+    phone: Option<&PhoneInfo>,
+    messages: &LinkStatus,
+    contacts: &LinkStatus,
+) -> Vec<Problem> {
     if !phone.is_some_and(|p| p.connected) {
         return Vec::new();
     }
@@ -157,39 +171,97 @@ mod tests {
     use super::*;
 
     fn phone(connected: bool, battery: Option<u8>) -> PhoneInfo {
-        PhoneInfo { address: "AA:BB".into(), name: "Pixel".into(), connected, battery }
+        PhoneInfo {
+            address: "AA:BB".into(),
+            name: "Pixel".into(),
+            connected,
+            battery,
+        }
     }
 
     fn call(state: CallState, name: Option<&str>, number: &str) -> ActiveCall {
-        ActiveCall { id: "c".into(), state, number: number.into(), name: name.map(str::to_string), since: None }
+        ActiveCall {
+            id: "c".into(),
+            state,
+            number: number.into(),
+            name: name.map(str::to_string),
+            since: None,
+        }
     }
 
     #[test]
     fn the_dot_is_green_red_or_hollow() {
-        assert_eq!(phone_chip(Some(&phone(true, None)), &LinkStatus::Ready).dot, Dot::Green);
-        assert_eq!(phone_chip(Some(&phone(true, None)), &LinkStatus::Connecting).dot, Dot::Hollow);
-        assert_eq!(phone_chip(Some(&phone(true, None)), &LinkStatus::Idle).dot, Dot::Hollow);
-        assert_eq!(phone_chip(Some(&phone(true, None)), &LinkStatus::AccessDenied).dot, Dot::Red);
-        assert_eq!(phone_chip(Some(&phone(true, None)), &LinkStatus::Failed("x".into())).dot, Dot::Red);
-        assert_eq!(phone_chip(Some(&phone(false, None)), &LinkStatus::Ready).dot, Dot::Red);
+        assert_eq!(
+            phone_chip(Some(&phone(true, None)), &LinkStatus::Ready).dot,
+            Dot::Green
+        );
+        assert_eq!(
+            phone_chip(Some(&phone(true, None)), &LinkStatus::Connecting).dot,
+            Dot::Hollow
+        );
+        assert_eq!(
+            phone_chip(Some(&phone(true, None)), &LinkStatus::Idle).dot,
+            Dot::Hollow
+        );
+        assert_eq!(
+            phone_chip(Some(&phone(true, None)), &LinkStatus::AccessDenied).dot,
+            Dot::Red
+        );
+        assert_eq!(
+            phone_chip(Some(&phone(true, None)), &LinkStatus::Failed("x".into())).dot,
+            Dot::Red
+        );
+        assert_eq!(
+            phone_chip(Some(&phone(false, None)), &LinkStatus::Ready).dot,
+            Dot::Red
+        );
         assert_eq!(phone_chip(None, &LinkStatus::Idle).dot, Dot::Red);
     }
 
     #[test]
     fn an_implausible_battery_is_hidden() {
-        assert_eq!(phone_chip(Some(&phone(true, Some(82))), &LinkStatus::Ready).battery, Some(82));
-        assert_eq!(phone_chip(Some(&phone(true, Some(255))), &LinkStatus::Ready).battery, None);
+        assert_eq!(
+            phone_chip(Some(&phone(true, Some(82))), &LinkStatus::Ready).battery,
+            Some(82)
+        );
+        assert_eq!(
+            phone_chip(Some(&phone(true, Some(255))), &LinkStatus::Ready).battery,
+            None
+        );
     }
 
     #[test]
     fn the_display_puts_calls_first() {
         let p = phone(true, None);
-        assert_eq!(lcd_text(Some(&p), &LinkStatus::Ready, &[]), "PHONE CONNECTED");
-        assert_eq!(lcd_text(Some(&p), &LinkStatus::Ready, &[call(CallState::Incoming, None, "1")]), "INCOMING CALL");
-        assert_eq!(lcd_text(Some(&p), &LinkStatus::Ready, &[call(CallState::Active, None, "1")]), "IN CALL");
+        assert_eq!(
+            lcd_text(Some(&p), &LinkStatus::Ready, &[]),
+            "PHONE CONNECTED"
+        );
+        assert_eq!(
+            lcd_text(
+                Some(&p),
+                &LinkStatus::Ready,
+                &[call(CallState::Incoming, None, "1")]
+            ),
+            "INCOMING CALL"
+        );
+        assert_eq!(
+            lcd_text(
+                Some(&p),
+                &LinkStatus::Ready,
+                &[call(CallState::Active, None, "1")]
+            ),
+            "IN CALL"
+        );
         assert_eq!(lcd_text(None, &LinkStatus::Idle, &[]), "NO PHONE");
-        assert_eq!(lcd_text(Some(&phone(false, None)), &LinkStatus::Idle, &[]), "PHONE OFFLINE");
-        assert_eq!(lcd_text(Some(&p), &LinkStatus::Connecting, &[]), "CONNECTING");
+        assert_eq!(
+            lcd_text(Some(&phone(false, None)), &LinkStatus::Idle, &[]),
+            "PHONE OFFLINE"
+        );
+        assert_eq!(
+            lcd_text(Some(&p), &LinkStatus::Connecting, &[]),
+            "CONNECTING"
+        );
     }
 
     #[test]
@@ -210,31 +282,75 @@ mod tests {
         let denied = LinkStatus::AccessDenied;
         assert!(problems(None, &denied, &LinkStatus::Idle).is_empty());
         assert!(problems(Some(&phone(false, None)), &denied, &LinkStatus::Idle).is_empty());
-        assert_eq!(problems(Some(&phone(true, None)), &denied, &LinkStatus::Idle), vec![Problem::MessageAccess]);
-        let both = problems(Some(&phone(true, None)), &LinkStatus::Failed("a".into()), &LinkStatus::Failed("b".into()));
-        assert_eq!(both, vec![Problem::MessagesFailed("a".into()), Problem::ContactsFailed("b".into())]);
-        assert!(problems(Some(&phone(true, None)), &LinkStatus::Ready, &LinkStatus::Connecting).is_empty());
+        assert_eq!(
+            problems(Some(&phone(true, None)), &denied, &LinkStatus::Idle),
+            vec![Problem::MessageAccess]
+        );
+        let both = problems(
+            Some(&phone(true, None)),
+            &LinkStatus::Failed("a".into()),
+            &LinkStatus::Failed("b".into()),
+        );
+        assert_eq!(
+            both,
+            vec![
+                Problem::MessagesFailed("a".into()),
+                Problem::ContactsFailed("b".into())
+            ]
+        );
+        assert!(problems(
+            Some(&phone(true, None)),
+            &LinkStatus::Ready,
+            &LinkStatus::Connecting
+        )
+        .is_empty());
     }
 
     #[test]
     fn notices_that_repeat_a_banner_are_dropped() {
         let active = vec![Problem::MessageAccess];
-        assert!(notice_is_redundant("Allow message access for this computer on your phone, then it will connect.", &active));
+        assert!(notice_is_redundant(
+            "Allow message access for this computer on your phone, then it will connect.",
+            &active
+        ));
         assert!(!notice_is_redundant("No phone is connected.", &active));
-        assert!(!notice_is_redundant("Allow message access for this computer", &[]));
+        assert!(!notice_is_redundant(
+            "Allow message access for this computer",
+            &[]
+        ));
     }
 
     #[test]
     fn call_titles_fall_back_gracefully() {
-        assert_eq!(call_title(&call(CallState::Active, Some("Alí"), "+1")), "Alí");
-        assert_eq!(call_title(&call(CallState::Active, None, "+1 555")), "+1 555");
-        assert_eq!(call_title(&call(CallState::Active, Some("  "), "+1 555")), "+1 555");
-        assert_eq!(call_title(&call(CallState::Incoming, None, "")), "Unknown caller");
+        assert_eq!(
+            call_title(&call(CallState::Active, Some("Alí"), "+1")),
+            "Alí"
+        );
+        assert_eq!(
+            call_title(&call(CallState::Active, None, "+1 555")),
+            "+1 555"
+        );
+        assert_eq!(
+            call_title(&call(CallState::Active, Some("  "), "+1 555")),
+            "+1 555"
+        );
+        assert_eq!(
+            call_title(&call(CallState::Incoming, None, "")),
+            "Unknown caller"
+        );
     }
 
     #[test]
     fn every_call_state_has_a_label() {
-        for s in [CallState::Incoming, CallState::Waiting, CallState::Dialing, CallState::Alerting, CallState::Active, CallState::Held, CallState::Disconnected] {
+        for s in [
+            CallState::Incoming,
+            CallState::Waiting,
+            CallState::Dialing,
+            CallState::Alerting,
+            CallState::Active,
+            CallState::Held,
+            CallState::Disconnected,
+        ] {
             assert!(!call_state_label(s).is_empty());
         }
     }

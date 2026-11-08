@@ -33,7 +33,10 @@ impl UiState {
     /// Texts in `conv` that came in, are unread on the phone, and have not been seen here.
     pub fn unread_in(&self, conv: &Conversation) -> usize {
         let seen = self.read_until.get(&conv.key).copied().unwrap_or(i64::MIN);
-        conv.messages.iter().filter(|m| m.incoming && !m.read && m.at > seen).count()
+        conv.messages
+            .iter()
+            .filter(|m| m.incoming && !m.read && m.at > seen)
+            .count()
     }
 
     pub fn unread_total(&self, conversations: &[Conversation]) -> usize {
@@ -48,7 +51,9 @@ pub struct UiStore {
 
 impl UiStore {
     pub fn new(config_dir: &std::path::Path) -> Self {
-        Self { path: config_dir.join("ui.json") }
+        Self {
+            path: config_dir.join("ui.json"),
+        }
     }
 
     pub fn load(&self) -> UiState {
@@ -69,15 +74,31 @@ mod tests {
     use phone_core::conversations::Message;
 
     fn conv(messages: Vec<Message>) -> Conversation {
-        Conversation { key: "k".into(), number: "+1".into(), messages }
+        Conversation {
+            key: "k".into(),
+            number: "+1".into(),
+            messages,
+        }
     }
     fn m(at: i64, incoming: bool, read: bool) -> Message {
-        Message { number: "+1".into(), incoming, text: "x".into(), at, read, pending: false }
+        Message {
+            number: "+1".into(),
+            incoming,
+            text: "x".into(),
+            at,
+            read,
+            pending: false,
+        }
     }
 
     #[test]
     fn unread_counts_only_incoming_unread_and_unseen() {
-        let c = conv(vec![m(10, true, false), m(20, true, false), m(30, false, true), m(40, true, true)]);
+        let c = conv(vec![
+            m(10, true, false),
+            m(20, true, false),
+            m(30, false, true),
+            m(40, true, true),
+        ]);
         let mut st = UiState::default();
         assert_eq!(st.unread_in(&c), 2);
         st.mark_read("k", 10);
@@ -108,7 +129,10 @@ mod tests {
     fn state_survives_a_round_trip_and_a_bad_file() {
         let dir = tempfile::tempdir().unwrap();
         let store = UiStore::new(dir.path());
-        let mut st = UiState { tab: Tab::Messages, ..UiState::default() };
+        let mut st = UiState {
+            tab: Tab::Messages,
+            ..UiState::default()
+        };
         st.mark_read("k", 5);
         store.save(&st);
         assert_eq!(store.load(), st);

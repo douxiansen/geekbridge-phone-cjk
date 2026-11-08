@@ -4,7 +4,9 @@
 //! does nothing. Buttons on the alerts (Answer, Decline, Open) are routed back through the
 //! [`NotifierHost`].
 
-use crate::notify::{CallEndedNotice, CallNotice, Notifier, NotifierHost, NotifyId, TextNotice};
+use crate::notify::{
+    CallEndedNotice, CallNotice, CallUpdate, Notifier, NotifierHost, NotifyId, TextNotice,
+};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, MutexGuard};
 use zbus::blocking::{Connection, MessageIterator};
@@ -46,23 +48,54 @@ pub struct FreedesktopNotifier {
 
 impl FreedesktopNotifier {
     pub fn new(host: NotifierHost) -> Self {
-        let conn = Connection::session().map_err(|e| log::info!("no session bus, no desktop notifications: {e}")).ok();
+        let conn = Connection::session()
+            .map_err(|e| log::info!("no session bus, no desktop notifications: {e}"))
+            .ok();
         let slots: Slots = Arc::default();
         let targets: Pending = Arc::default();
         if let Some(c) = &conn {
             listen(c.clone(), host, targets.clone(), slots.clone());
         }
-        Self { conn, slots, targets }
+        Self {
+            conn,
+            slots,
+            targets,
+        }
     }
 
-    fn post(&self, slot: NotifyId, target: Target, summary: &str, body: &str, actions: &[(&str, &str)], timeout_ms: i32, category: &str) {
+    #[allow(clippy::too_many_arguments)] // one field of the D-Bus call each
+    fn post(
+        &self,
+        slot: NotifyId,
+        target: Target,
+        summary: &str,
+        body: &str,
+        actions: &[(&str, &str)],
+        timeout_ms: i32,
+        category: &str,
+    ) {
         let Some(conn) = &self.conn else { return };
         let replaces = lock(&self.slots).get(&slot).copied().unwrap_or(0);
         let flat_actions: Vec<&str> = actions.iter().flat_map(|(k, l)| [*k, *l]).collect();
         let mut hints: HashMap<&str, Value<'_>> = HashMap::new();
         hints.insert("desktop-entry", Value::from("geekbridge-phone"));
         hints.insert("category", Value::from(category));
-        let reply = conn.call_method(Some(DEST), PATH, Some(DEST), "Notify", &(APP_NAME, replaces, ICON, summary, body, flat_actions, hints, timeout_ms));
+        let reply = conn.call_method(
+            Some(DEST),
+            PATH,
+            Some(DEST),
+            "Notify",
+            &(
+                APP_NAME,
+                replaces,
+                ICON,
+                summary,
+                body,
+                flat_actions,
+                hints,
+                timeout_ms,
+            ),
+        );
         match reply.and_then(|m| m.body().deserialize::<u32>()) {
             Ok(id) => {
                 lock(&self.slots).insert(slot, id);
@@ -94,16 +127,27 @@ fn who(name: &Option<String>, number: &str) -> String {
 impl Notifier for FreedesktopNotifier {
     fn incoming_call(&self, call: &CallNotice) {
         let title = who(&call.name, &call.number);
-        let body = if call.name.is_some() { call.number.clone() } else { "Incoming call".to_string() };
+        let body = if call.name.is_some() {
+            call.number.clone()
+        } else {
+            "Incoming call".to_string()
+        };
         self.post(
             call.id(),
-            Target::Call { call_id: call.call_id.clone() },
+            Target::Call {
+                call_id: call.call_id.clone(),
+            },
             &format!("Incoming call: {title}"),
             &body,
             &[("answer", "Answer"), ("decline", "Decline")],
             CALL_TIMEOUT_MS,
             "call.incoming",
         );
+    }
+
+    fn call_updated(&self, call: &CallUpdate) {
+        // The call was answered (here or on the phone): the ringing alert has done its job.
+        self.clear(&call.id());
     }
 
     fn call_ended(&self, call: &CallEndedNotice) {
@@ -115,7 +159,11 @@ impl Notifier for FreedesktopNotifier {
             NotifyId::Call(format!("missed:{}", call.call_id)),
             Target::Window,
             &format!("Missed call: {title}"),
-            if call.name.is_some() { &call.number } else { "" },
+            if call.name.is_some() {
+                &call.number
+            } else {
+                ""
+            },
             &[("default", "Open")],
             -1,
             "call.missed",
@@ -127,7 +175,9 @@ impl Notifier for FreedesktopNotifier {
         let timeout = i32::try_from(text.timeout_secs.saturating_mul(1000)).unwrap_or(8000);
         self.post(
             text.id(),
-            Target::Conversation { number: text.number.clone() },
+            Target::Conversation {
+                number: text.number.clone(),
+            },
             &title,
             &shorten(&text.body),
             &[("default", "Open")],
@@ -138,9 +188,13 @@ impl Notifier for FreedesktopNotifier {
 
     fn clear(&self, id: &NotifyId) {
         let Some(conn) = &self.conn else { return };
-        let Some(open) = lock(&self.slots).remove(id) else { return };
+        let Some(open) = lock(&self.slots).remove(id) else {
+            return;
+        };
         lock(&self.targets).remove(&open);
-        if let Err(e) = conn.call_method(Some(DEST), PATH, Some(DEST), "CloseNotification", &(open,)) {
+        if let Err(e) =
+            conn.call_method(Some(DEST), PATH, Some(DEST), "CloseNotification", &(open,))
+        {
             log::debug!("could not close notification: {e}");
         }
     }
@@ -148,44 +202,53 @@ impl Notifier for FreedesktopNotifier {
 
 /// Watches the daemon's signals on a background thread and routes button presses.
 fn listen(conn: Connection, host: NotifierHost, targets: Pending, slots: Slots) {
-    let spawned = std::thread::Builder::new().name("gbp-notify-signals".into()).spawn(move || {
-        let rule = match zbus::MatchRule::builder().msg_type(zbus::message::Type::Signal).interface(DEST).map(|b| b.build()) {
-            Ok(r) => r,
-            Err(e) => {
-                log::debug!("notification signals unavailable: {e}");
-                return;
-            }
-        };
-        let iter = match MessageIterator::for_match_rule(rule, &conn, None) {
-            Ok(i) => i,
-            Err(e) => {
-                log::debug!("notification signals unavailable: {e}");
-                return;
-            }
-        };
-        for msg in iter {
-            let Ok(msg) = msg else { continue };
-            let header = msg.header();
-            let member = header.member().map(|m| m.as_str().to_string()).unwrap_or_default();
-            match member.as_str() {
-                "ActionInvoked" => {
-                    if let Ok((id, key)) = msg.body().deserialize::<(u32, String)>() {
-                        let target = lock(&targets).get(&id).cloned();
-                        if let Some(target) = target {
-                            route(&host, &target, &key);
+    let spawned = std::thread::Builder::new()
+        .name("gbp-notify-signals".into())
+        .spawn(move || {
+            let rule = match zbus::MatchRule::builder()
+                .msg_type(zbus::message::Type::Signal)
+                .interface(DEST)
+                .map(|b| b.build())
+            {
+                Ok(r) => r,
+                Err(e) => {
+                    log::debug!("notification signals unavailable: {e}");
+                    return;
+                }
+            };
+            let iter = match MessageIterator::for_match_rule(rule, &conn, None) {
+                Ok(i) => i,
+                Err(e) => {
+                    log::debug!("notification signals unavailable: {e}");
+                    return;
+                }
+            };
+            for msg in iter {
+                let Ok(msg) = msg else { continue };
+                let header = msg.header();
+                let member = header
+                    .member()
+                    .map(|m| m.as_str().to_string())
+                    .unwrap_or_default();
+                match member.as_str() {
+                    "ActionInvoked" => {
+                        if let Ok((id, key)) = msg.body().deserialize::<(u32, String)>() {
+                            let target = lock(&targets).get(&id).cloned();
+                            if let Some(target) = target {
+                                route(&host, &target, &key);
+                            }
                         }
                     }
-                }
-                "NotificationClosed" => {
-                    if let Ok((id, _reason)) = msg.body().deserialize::<(u32, u32)>() {
-                        lock(&targets).remove(&id);
-                        lock(&slots).retain(|_, v| *v != id);
+                    "NotificationClosed" => {
+                        if let Ok((id, _reason)) = msg.body().deserialize::<(u32, u32)>() {
+                            lock(&targets).remove(&id);
+                            lock(&slots).retain(|_, v| *v != id);
+                        }
                     }
+                    _ => {}
                 }
-                _ => {}
             }
-        }
-    });
+        });
     if let Err(e) = spawned {
         log::debug!("cannot watch notification buttons: {e}");
     }
@@ -204,6 +267,23 @@ fn route(host: &NotifierHost, target: &Target, key: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use zbus::zvariant::Type;
+
+    /// The arguments of `Notify`, as the Desktop Notifications spec declares them.
+    #[test]
+    fn the_notify_call_has_the_signature_the_spec_declares() {
+        type Body<'a> = (
+            &'a str,
+            u32,
+            &'a str,
+            &'a str,
+            &'a str,
+            Vec<&'a str>,
+            HashMap<&'a str, Value<'a>>,
+            i32,
+        );
+        assert_eq!(Body::SIGNATURE.to_string(), "(susssasa{sv}i)");
+    }
 
     #[test]
     fn long_bodies_are_cut_and_flattened() {

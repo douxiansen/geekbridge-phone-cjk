@@ -14,18 +14,54 @@ pub struct Key {
 
 /// The twelve keys in reading order.
 pub const KEYS: [Key; 12] = [
-    Key { ch: '1', letters: "" },
-    Key { ch: '2', letters: "ABC" },
-    Key { ch: '3', letters: "DEF" },
-    Key { ch: '4', letters: "GHI" },
-    Key { ch: '5', letters: "JKL" },
-    Key { ch: '6', letters: "MNO" },
-    Key { ch: '7', letters: "PQRS" },
-    Key { ch: '8', letters: "TUV" },
-    Key { ch: '9', letters: "WXYZ" },
-    Key { ch: '*', letters: "" },
-    Key { ch: '0', letters: "+" },
-    Key { ch: '#', letters: "" },
+    Key {
+        ch: '1',
+        letters: "",
+    },
+    Key {
+        ch: '2',
+        letters: "ABC",
+    },
+    Key {
+        ch: '3',
+        letters: "DEF",
+    },
+    Key {
+        ch: '4',
+        letters: "GHI",
+    },
+    Key {
+        ch: '5',
+        letters: "JKL",
+    },
+    Key {
+        ch: '6',
+        letters: "MNO",
+    },
+    Key {
+        ch: '7',
+        letters: "PQRS",
+    },
+    Key {
+        ch: '8',
+        letters: "TUV",
+    },
+    Key {
+        ch: '9',
+        letters: "WXYZ",
+    },
+    Key {
+        ch: '*',
+        letters: "",
+    },
+    Key {
+        ch: '0',
+        letters: "+",
+    },
+    Key {
+        ch: '#',
+        letters: "",
+    },
 ];
 
 /// The letters printed under a digit key.
@@ -82,7 +118,11 @@ pub fn sanitise_paste(text: &str) -> String {
     let has_digit = trimmed.chars().any(|c| c.is_ascii_digit());
     let mut out = String::new();
     for ch in trimmed.chars() {
-        let mapped = if ch.is_ascii_alphabetic() && has_digit { digit_for_letter(ch) } else { Some(ch) };
+        let mapped = if ch.is_ascii_alphabetic() && has_digit {
+            digit_for_letter(ch)
+        } else {
+            Some(ch)
+        };
         if let Some(c) = mapped {
             push_str(&mut out, &c.to_string());
         }
@@ -95,9 +135,16 @@ pub fn sanitise_paste(text: &str) -> String {
 /// dialable characters.
 pub fn parse_tel_uri(uri: &str) -> Option<String> {
     let lower = uri.trim();
-    let rest = ["tel://", "tel:", "callto://", "callto:"].iter().find_map(|p| lower.get(..p.len()).filter(|h| h.eq_ignore_ascii_case(p)).map(|_| &lower[p.len()..]))?;
+    let rest = ["tel://", "tel:", "callto://", "callto:"]
+        .iter()
+        .find_map(|p| {
+            lower
+                .get(..p.len())
+                .filter(|h| h.eq_ignore_ascii_case(p))
+                .map(|_| &lower[p.len()..])
+        })?;
     // Parameters after `;` (extension, context) and a query after `?` are not part of the number.
-    let number = rest.split([';', '?', '#']).next().unwrap_or("");
+    let number = rest.split([';', '?']).next().unwrap_or("");
     let mut decoded = String::new();
     let mut chars = number.chars();
     while let Some(c) = chars.next() {
@@ -150,7 +197,10 @@ mod tests {
     fn every_letter_is_on_exactly_the_key_that_prints_it() {
         for c in 'a'..='z' {
             let d = digit_for_letter(c).unwrap();
-            assert!(letters_for(d).contains(c.to_ascii_uppercase()), "{c} is not under {d}");
+            assert!(
+                letters_for(d).contains(c.to_ascii_uppercase()),
+                "{c} is not under {d}"
+            );
         }
         assert_eq!(digit_for_letter('Q'), Some('7'));
         assert_eq!(digit_for_letter('1'), None);
@@ -210,9 +260,18 @@ mod tests {
 
     #[test]
     fn tel_links_give_the_number() {
-        assert_eq!(parse_tel_uri("tel:+1-555-010-0100").as_deref(), Some("+15550100100"));
-        assert_eq!(parse_tel_uri("TEL:%2B44%2020%207946%200958").as_deref(), Some("+442079460958"));
-        assert_eq!(parse_tel_uri("tel://0612345678;ext=12").as_deref(), Some("0612345678"));
+        assert_eq!(
+            parse_tel_uri("tel:+1-555-010-0100").as_deref(),
+            Some("+15550100100")
+        );
+        assert_eq!(
+            parse_tel_uri("TEL:%2B44%2020%207946%200958").as_deref(),
+            Some("+442079460958")
+        );
+        assert_eq!(
+            parse_tel_uri("tel://0612345678;ext=12").as_deref(),
+            Some("0612345678")
+        );
         assert_eq!(parse_tel_uri("callto:112?x=1").as_deref(), Some("112"));
         assert_eq!(parse_tel_uri("  tel:*21#  ").as_deref(), Some("*21#"));
     }

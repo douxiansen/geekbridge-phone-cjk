@@ -34,7 +34,14 @@ pub struct ActionSender {
 impl ActionSender {
     pub fn new(wake: Arc<dyn Fn() + Send + Sync>) -> (Self, Receiver<UiAction>) {
         let (tx, rx) = mpsc::channel();
-        (Self { tx, wake, raise: None }, rx)
+        (
+            Self {
+                tx,
+                wake,
+                raise: None,
+            },
+            rx,
+        )
     }
 
     /// Sets what brings the window back from being minimised. It runs on the sending thread, for
@@ -72,9 +79,16 @@ mod tests {
             w.fetch_add(1, Ordering::SeqCst);
         }));
         tx.send(UiAction::Show);
-        tx.clone().send(UiAction::OpenConversation { number: "+1".into() });
+        tx.clone().send(UiAction::OpenConversation {
+            number: "+1".into(),
+        });
         assert_eq!(rx.try_recv(), Ok(UiAction::Show));
-        assert_eq!(rx.try_recv(), Ok(UiAction::OpenConversation { number: "+1".into() }));
+        assert_eq!(
+            rx.try_recv(),
+            Ok(UiAction::OpenConversation {
+                number: "+1".into()
+            })
+        );
         assert_eq!(woken.load(Ordering::SeqCst), 2);
     }
 

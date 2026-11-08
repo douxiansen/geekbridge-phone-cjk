@@ -16,7 +16,13 @@ pub enum Tab {
 
 impl Tab {
     /// In sidebar order; the position is also the Ctrl/Cmd+number shortcut (1 to 5).
-    pub const ALL: [Tab; 5] = [Tab::Keypad, Tab::Contacts, Tab::Recents, Tab::Messages, Tab::Settings];
+    pub const ALL: [Tab; 5] = [
+        Tab::Keypad,
+        Tab::Contacts,
+        Tab::Recents,
+        Tab::Messages,
+        Tab::Settings,
+    ];
 
     pub fn label(self) -> &'static str {
         match self {
@@ -30,7 +36,10 @@ impl Tab {
 
     /// 1-based shortcut number.
     pub fn number(self) -> usize {
-        Self::ALL.iter().position(|t| *t == self).map_or(1, |i| i + 1)
+        Self::ALL
+            .iter()
+            .position(|t| *t == self)
+            .map_or(1, |i| i + 1)
     }
 
     /// The tab with shortcut number `n` (1 to 5).
@@ -40,7 +49,10 @@ impl Tab {
 
     /// Parses a tab name from the command line.
     pub fn parse(s: &str) -> Option<Tab> {
-        Self::ALL.iter().copied().find(|t| t.label().eq_ignore_ascii_case(s.trim()))
+        Self::ALL
+            .iter()
+            .copied()
+            .find(|t| t.label().eq_ignore_ascii_case(s.trim()))
     }
 }
 
@@ -67,6 +79,9 @@ mod tests {
 
     #[test]
     fn saved_names_are_lowercase() {
-        assert_eq!(serde_json::to_string(&Tab::Contacts).unwrap(), "\"contacts\"");
+        assert_eq!(
+            serde_json::to_string(&Tab::Contacts).unwrap(),
+            "\"contacts\""
+        );
     }
 }

@@ -7,7 +7,7 @@
 
 use super::dotmatrix;
 use super::theme::Palette;
-use eframe::egui::{self, Color32, Sense, Ui, WidgetInfo, WidgetType, pos2, vec2};
+use eframe::egui::{self, pos2, vec2, Color32, Sense, Ui, WidgetInfo, WidgetType};
 
 /// Dot pitch (distance between dot centres) for the dot-matrix sizes at 100% text.
 pub const PITCH_NUMERAL: f32 = 5.0;
@@ -18,7 +18,11 @@ const T_BODY: f32 = 14.0;
 
 /// Dot-matrix pitch follows the user's text scale (body text size relative to the default).
 pub fn scaled(ui: &Ui, pitch: f32) -> f32 {
-    let body = ui.style().text_styles.get(&egui::TextStyle::Body).map_or(T_BODY, |f| f.size);
+    let body = ui
+        .style()
+        .text_styles
+        .get(&egui::TextStyle::Body)
+        .map_or(T_BODY, |f| f.size);
     pitch * (body / T_BODY).clamp(0.8, 2.0)
 }
 
@@ -47,7 +51,15 @@ pub fn spoken(text: &str) -> &str {
 }
 
 /// Paints dot text at an exact position without allocating layout space (for overlays).
-pub fn dot_text_at(ui: &Ui, pal: &Palette, origin: egui::Pos2, text: &str, pitch: f32, color: Color32, grid: bool) {
+pub fn dot_text_at(
+    ui: &Ui,
+    pal: &Palette,
+    origin: egui::Pos2,
+    text: &str,
+    pitch: f32,
+    color: Color32,
+    grid: bool,
+) {
     let off = grid.then_some(pal.dot_off);
     dotmatrix::paint(ui.painter(), origin, text, pitch, color, off);
 }
@@ -80,7 +92,15 @@ pub fn chars_fitting(pitch: f32, max_width: f32) -> usize {
 }
 
 /// Like [`dot_text`], but picks the longest candidate that fits `max_width`.
-pub fn dot_text_fit(ui: &mut Ui, pal: &Palette, candidates: &[&str], pitch: f32, max_width: f32, color: Color32, grid: bool) {
+pub fn dot_text_fit(
+    ui: &mut Ui,
+    pal: &Palette,
+    candidates: &[&str],
+    pitch: f32,
+    max_width: f32,
+    color: Color32,
+    grid: bool,
+) {
     let p = scaled(ui, pitch);
     let text = dotmatrix::fit(candidates, p, max_width);
     dot_text(ui, pal, text, pitch, color, grid);
@@ -105,9 +125,15 @@ mod tests {
                 let n = chars_fitting(pitch, width);
                 let text = "8".repeat(n);
                 if n > 0 {
-                    assert!(dot_size(&text, pitch).x <= width + 0.01, "pitch {pitch} width {width} n {n}");
+                    assert!(
+                        dot_size(&text, pitch).x <= width + 0.01,
+                        "pitch {pitch} width {width} n {n}"
+                    );
                 }
-                assert!(dot_size(&"8".repeat(n + 1), pitch).x > width, "one more must not fit");
+                assert!(
+                    dot_size(&"8".repeat(n + 1), pitch).x > width,
+                    "one more must not fit"
+                );
             }
         }
         assert_eq!(chars_fitting(5.0, 1.0), 0);
@@ -119,8 +145,11 @@ mod tests {
         assert_eq!(big, 5.0);
         let w = 200.0;
         let p = fit_pitch("+213550123456789", 5.0, 2.0, w);
-        assert!(p < 5.0 && p >= 2.0);
+        assert!((2.0..5.0).contains(&p));
         assert!(dot_size("+213550123456789", p).x <= w + 0.01);
-        assert_eq!(fit_pitch("1234567890123456789012345678901234567890", 5.0, 2.0, 50.0), 2.0);
+        assert_eq!(
+            fit_pitch("1234567890123456789012345678901234567890", 5.0, 2.0, 50.0),
+            2.0
+        );
     }
 }

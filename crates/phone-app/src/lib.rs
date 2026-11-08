@@ -84,7 +84,11 @@ pub struct RunOptions {
 /// Runs the app until the window is closed. Returns an error text when it cannot start.
 pub fn run(opts: RunOptions) -> Result<(), String> {
     #[cfg(feature = "demo")]
-    let demo_dir = if opts.demo { Some(demo::DemoDir::create().map_err(|e| format!("cannot create the demo folder: {e}"))?) } else { None };
+    let demo_dir = if opts.demo {
+        Some(demo::DemoDir::create().map_err(|e| format!("cannot create the demo folder: {e}"))?)
+    } else {
+        None
+    };
     #[cfg(not(feature = "demo"))]
     if opts.demo {
         return Err("this build has no demo mode".into());
@@ -100,19 +104,31 @@ pub fn run(opts: RunOptions) -> Result<(), String> {
 
     // One app per user. The demo has its own socket so it never meets the real app.
     let _ = std::fs::create_dir_all(&paths.data);
-    let name = if opts.demo { "geekbridge-phone-demo" } else { "geekbridge-phone" };
+    let name = if opts.demo {
+        "geekbridge-phone-demo"
+    } else {
+        "geekbridge-phone"
+    };
     let request = opts.request.clone().unwrap_or(Request::Show);
     let guard = match instance::acquire(&instance::socket_dir(paths.data.clone()), name, &request) {
         Role::Primary(guard) => Some(guard),
         Role::Secondary => return Ok(()),
-        Role::Unresponsive(why) => return Err(format!("GeekBridge Phone seems to be running already but does not answer ({why}).")),
+        Role::Unresponsive(why) => {
+            return Err(format!(
+                "GeekBridge Phone seems to be running already but does not answer ({why})."
+            ))
+        }
     };
 
-    let settings: Settings = store::load::<Settings>(&paths.config.join("settings.json")).sanitised();
+    let settings: Settings =
+        store::load::<Settings>(&paths.config.join("settings.json")).sanitised();
     let start_minimised = opts.minimised || settings.start_minimised;
 
     #[cfg(feature = "demo")]
-    let (platform, demo_control): (std::sync::Arc<dyn phone_core::platform::Platform>, Option<demo::DemoControl>) = if opts.demo {
+    let (platform, demo_control): (
+        std::sync::Arc<dyn phone_core::platform::Platform>,
+        Option<demo::DemoControl>,
+    ) = if opts.demo {
         let p = phone_core::demo::DemoPlatform::new();
         let control = demo::DemoControl::new(p.clone());
         if let Some(scene) = opts.scene {
@@ -133,7 +149,10 @@ pub fn run(opts: RunOptions) -> Result<(), String> {
         .with_inner_size([w, h])
         .with_min_inner_size([720.0, 520.0])
         .with_icon(icon::app_icon());
-    let native = eframe::NativeOptions { viewport, ..Default::default() };
+    let native = eframe::NativeOptions {
+        viewport,
+        ..Default::default()
+    };
 
     let mut boot = Some(Boot {
         paths,
@@ -146,7 +165,9 @@ pub fn run(opts: RunOptions) -> Result<(), String> {
         app_id,
         zoom: opts.zoom,
         initial: match &opts.request {
-            Some(Request::Open(n)) => Some(action::UiAction::OpenConversation { number: n.clone() }),
+            Some(Request::Open(n)) => {
+                Some(action::UiAction::OpenConversation { number: n.clone() })
+            }
             Some(Request::Dial(n)) => Some(action::UiAction::PrefillDial { number: n.clone() }),
             _ => None,
         },

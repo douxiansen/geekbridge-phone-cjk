@@ -65,11 +65,15 @@ fn parse_theme(s: &str) -> Option<ThemePref> {
 fn parse(args: impl IntoIterator<Item = String>) -> Result<Cli, String> {
     let mut cli = Cli::default();
     let mut args = args.into_iter();
-    let value = |flag: &str, args: &mut dyn Iterator<Item = String>| args.next().ok_or_else(|| format!("{flag} needs a value"));
+    let value = |flag: &str, args: &mut dyn Iterator<Item = String>| {
+        args.next().ok_or_else(|| format!("{flag} needs a value"))
+    };
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "-h" | "--help" => cli.exit_text = Some(HELP.to_string()),
-            "-V" | "--version" => cli.exit_text = Some(format!("geekbridge-phone {}", env!("CARGO_PKG_VERSION"))),
+            "-V" | "--version" => {
+                cli.exit_text = Some(format!("geekbridge-phone {}", env!("CARGO_PKG_VERSION")))
+            }
             "--demo" => cli.opts.demo = true,
             "--minimised" | "--minimized" | "--background" => cli.opts.minimised = true,
             "--tour" => cli.opts.tour = true,
@@ -81,7 +85,8 @@ fn parse(args: impl IntoIterator<Item = String>) -> Result<Cli, String> {
             }
             "--theme" => {
                 let v = value("--theme", &mut args)?;
-                cli.opts.theme = Some(parse_theme(&v).ok_or_else(|| format!("unknown theme {v:?}"))?);
+                cli.opts.theme =
+                    Some(parse_theme(&v).ok_or_else(|| format!("unknown theme {v:?}"))?);
             }
             "--zoom" => {
                 let v = value("--zoom", &mut args)?;
@@ -90,10 +95,20 @@ fn parse(args: impl IntoIterator<Item = String>) -> Result<Cli, String> {
             "--scene" => cli.opts.scene = Some(value("--scene", &mut args)?),
             "--size" => {
                 let v = value("--size", &mut args)?;
-                cli.opts.size = Some(parse_size(&v).ok_or_else(|| format!("bad size {v:?}, expected WIDTHxHEIGHT"))?);
+                cli.opts.size = Some(
+                    parse_size(&v)
+                        .ok_or_else(|| format!("bad size {v:?}, expected WIDTHxHEIGHT"))?,
+                );
             }
-            other if other.starts_with("tel:") || other.starts_with("callto:") || other.starts_with("TEL:") => {
-                cli.opts.dial = Some(phone_app::model::keypad::parse_tel_uri(other).ok_or_else(|| format!("no phone number in {other:?}"))?);
+            other
+                if other.starts_with("tel:")
+                    || other.starts_with("callto:")
+                    || other.starts_with("TEL:") =>
+            {
+                cli.opts.dial = Some(
+                    phone_app::model::keypad::parse_tel_uri(other)
+                        .ok_or_else(|| format!("no phone number in {other:?}"))?,
+                );
             }
             other => return Err(format!("unknown option {other:?}; try --help")),
         }
@@ -105,7 +120,8 @@ fn parse(args: impl IntoIterator<Item = String>) -> Result<Cli, String> {
 }
 
 fn main() {
-    let _ = env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("warn")).try_init();
+    let _ = env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("warn"))
+        .try_init();
     let cli = match parse(std::env::args().skip(1)) {
         Ok(c) => c,
         Err(e) => {
@@ -168,7 +184,11 @@ mod tests {
 
     #[test]
     fn flags_and_values_parse() {
-        let cli = args(&["--demo", "--tab", "Messages", "--theme", "dark", "--size", "720x520", "--scene", "ring", "--open", "+1555"]).unwrap();
+        let cli = args(&[
+            "--demo", "--tab", "Messages", "--theme", "dark", "--size", "720x520", "--scene",
+            "ring", "--open", "+1555",
+        ])
+        .unwrap();
         assert!(cli.opts.demo);
         assert_eq!(cli.opts.tab, Some(Tab::Messages));
         assert_eq!(cli.opts.theme, Some(ThemePref::Dark));
@@ -196,7 +216,15 @@ mod tests {
 
     #[test]
     fn help_and_version_ask_to_exit() {
-        assert!(args(&["--help"]).unwrap().exit_text.unwrap().contains("USAGE"));
-        assert!(args(&["-V"]).unwrap().exit_text.unwrap().starts_with("geekbridge-phone "));
+        assert!(args(&["--help"])
+            .unwrap()
+            .exit_text
+            .unwrap()
+            .contains("USAGE"));
+        assert!(args(&["-V"])
+            .unwrap()
+            .exit_text
+            .unwrap()
+            .starts_with("geekbridge-phone "));
     }
 }

@@ -14,7 +14,9 @@ pub struct UnavailablePlatform {
 
 impl UnavailablePlatform {
     pub fn new(reason: impl Into<String>) -> Self {
-        Self { reason: reason.into() }
+        Self {
+            reason: reason.into(),
+        }
     }
 
     fn fail<T>(&self) -> Result<T> {
@@ -62,13 +64,17 @@ pub fn live_platform() -> Arc<dyn Platform> {
             Ok(p) => Arc::new(p),
             Err(e) => {
                 log::error!("Linux Bluetooth platform failed to start: {e}");
-                Arc::new(UnavailablePlatform::new(format!("Bluetooth is not available: {e}")))
+                Arc::new(UnavailablePlatform::new(format!(
+                    "Bluetooth is not available: {e}"
+                )))
             }
         }
     }
     #[cfg(not(target_os = "linux"))]
     {
-        Arc::new(UnavailablePlatform::new("This system is not supported yet."))
+        Arc::new(UnavailablePlatform::new(
+            "This system is not supported yet.",
+        ))
     }
 }
 

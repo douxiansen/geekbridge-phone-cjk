@@ -4,7 +4,7 @@
 //! Vendored from the GeekBridge design system (`bridge-apps/src/dotmatrix.rs`, same licence),
 //! with `%`, `(`, `)`, `'` and `_` added. Text is upper-cased; characters without a glyph render
 //! as blanks.
-use eframe::egui::{Color32, Painter, Pos2, Rect, Vec2, pos2, vec2};
+use eframe::egui::{pos2, vec2, Color32, Painter, Pos2, Rect, Vec2};
 
 pub const COLS: usize = 5;
 pub const ROWS: usize = 7;

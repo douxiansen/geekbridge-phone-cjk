@@ -11,7 +11,11 @@ pub fn unix_now() -> i64 {
 
 /// The local UTC offset in force at `ts`.
 pub fn local_offset(ts: i64) -> FixedOffset {
-    Local.timestamp_opt(ts, 0).single().map(|d| *d.offset()).unwrap_or_else(|| Utc.fix())
+    Local
+        .timestamp_opt(ts, 0)
+        .single()
+        .map(|d| *d.offset())
+        .unwrap_or_else(|| Utc.fix())
 }
 
 fn at(ts: i64, off: FixedOffset) -> Option<DateTime<FixedOffset>> {
@@ -44,7 +48,9 @@ fn day_kind(then: NaiveDate, now: NaiveDate) -> DayKind {
 }
 
 const WEEKDAYS: [&str; 7] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-const MONTHS: [&str; 12] = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const MONTHS: [&str; 12] = [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+];
 
 fn weekday(d: &DateTime<FixedOffset>) -> &'static str {
     WEEKDAYS[d.weekday().num_days_from_monday() as usize % 7]
@@ -122,7 +128,10 @@ mod tests {
     }
     /// Unix time of a local (UTC+1) date and time.
     fn t(y: i32, mo: u32, d: u32, h: u32, mi: u32) -> i64 {
-        off().with_ymd_and_hms(y, mo, d, h, mi, 0).unwrap().timestamp()
+        off()
+            .with_ymd_and_hms(y, mo, d, h, mi, 0)
+            .unwrap()
+            .timestamp()
     }
 
     #[test]
@@ -141,23 +150,42 @@ mod tests {
     fn a_time_in_the_future_reads_as_today() {
         let now = t(2026, 11, 8, 12, 0);
         assert_eq!(list_time(t(2026, 11, 8, 12, 5), now, off()), "12:05");
-        assert_eq!(thread_stamp(t(2026, 11, 9, 8, 0), now, off()), "Today 08:00");
+        assert_eq!(
+            thread_stamp(t(2026, 11, 9, 8, 0), now, off()),
+            "Today 08:00"
+        );
     }
 
     #[test]
     fn thread_stamps_carry_the_clock() {
         let now = t(2026, 11, 8, 15, 0);
-        assert_eq!(thread_stamp(t(2026, 11, 8, 14, 5), now, off()), "Today 14:05");
-        assert_eq!(thread_stamp(t(2026, 11, 7, 9, 30), now, off()), "Yesterday 09:30");
+        assert_eq!(
+            thread_stamp(t(2026, 11, 8, 14, 5), now, off()),
+            "Today 14:05"
+        );
+        assert_eq!(
+            thread_stamp(t(2026, 11, 7, 9, 30), now, off()),
+            "Yesterday 09:30"
+        );
         assert_eq!(thread_stamp(t(2026, 11, 4, 9, 30), now, off()), "Wed 09:30");
-        assert_eq!(thread_stamp(t(2026, 10, 12, 9, 30), now, off()), "12 Oct 09:30");
-        assert_eq!(thread_stamp(t(2024, 10, 12, 9, 30), now, off()), "12 Oct 2024 09:30");
+        assert_eq!(
+            thread_stamp(t(2026, 10, 12, 9, 30), now, off()),
+            "12 Oct 09:30"
+        );
+        assert_eq!(
+            thread_stamp(t(2024, 10, 12, 9, 30), now, off()),
+            "12 Oct 2024 09:30"
+        );
     }
 
     #[test]
     fn the_zone_decides_the_day() {
         // 23:30 UTC is already the next day at UTC+1.
-        let ts = FixedOffset::east_opt(0).unwrap().with_ymd_and_hms(2026, 11, 7, 23, 30, 0).unwrap().timestamp();
+        let ts = FixedOffset::east_opt(0)
+            .unwrap()
+            .with_ymd_and_hms(2026, 11, 7, 23, 30, 0)
+            .unwrap()
+            .timestamp();
         let now = t(2026, 11, 8, 12, 0);
         assert_eq!(list_time(ts, now, off()), "00:30");
     }

@@ -17,7 +17,10 @@ pub fn app_icon() -> IconData {
         for x in 0..SIZE {
             // Rounded square.
             let (cx, cy) = (x as f32 + 0.5, y as f32 + 0.5);
-            let (dx, dy) = ((cx - 32.0).abs() - (32.0 - radius), (cy - 32.0).abs() - (32.0 - radius));
+            let (dx, dy) = (
+                (cx - 32.0).abs() - (32.0 - radius),
+                (cy - 32.0).abs() - (32.0 - radius),
+            );
             let inside = dx.max(0.0).hypot(dy.max(0.0)) <= radius;
             if inside {
                 put(&mut rgba, x, y, [12, 12, 12, 255]);
@@ -28,7 +31,11 @@ pub fn app_icon() -> IconData {
     for row in 0..4u32 {
         for col in 0..3u32 {
             let (cx, cy) = (18.0 + col as f32 * 14.0, 12.0 + row as f32 * 13.0);
-            let colour = if row == 3 && col == 1 { [215, 25, 33, 255] } else { [244, 244, 241, 255] };
+            let colour = if row == 3 && col == 1 {
+                [215, 25, 33, 255]
+            } else {
+                [244, 244, 241, 255]
+            };
             for y in 0..SIZE {
                 for x in 0..SIZE {
                     let (px, py) = (x as f32 + 0.5 - cx, y as f32 + 0.5 - cy);
@@ -39,7 +46,11 @@ pub fn app_icon() -> IconData {
             }
         }
     }
-    IconData { rgba, width: SIZE, height: SIZE }
+    IconData {
+        rgba,
+        width: SIZE,
+        height: SIZE,
+    }
 }
 
 #[cfg(test)]
@@ -50,7 +61,11 @@ mod tests {
     fn the_icon_has_the_right_size_and_shows_the_red_dot() {
         let icon = app_icon();
         assert_eq!(icon.rgba.len(), (icon.width * icon.height * 4) as usize);
-        let reds = icon.rgba.chunks(4).filter(|p| p == &[215, 25, 33, 255]).count();
+        let reds = icon
+            .rgba
+            .chunks(4)
+            .filter(|p| p == &[215, 25, 33, 255])
+            .count();
         assert!(reds > 20);
         // Corners are transparent: it is a rounded square.
         assert_eq!(icon.rgba[3], 0);

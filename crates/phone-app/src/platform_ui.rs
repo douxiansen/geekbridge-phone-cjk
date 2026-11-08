@@ -9,7 +9,10 @@ use std::path::{Path, PathBuf};
 /// Where call recordings go when the user chose nothing: `~/Music/GeekBridge Calls`, or the
 /// platform's music folder.
 pub fn default_recordings_dir() -> PathBuf {
-    dirs::audio_dir().or_else(|| dirs::home_dir().map(|h| h.join("Music"))).unwrap_or_else(|| PathBuf::from(".")).join("GeekBridge Calls")
+    dirs::audio_dir()
+        .or_else(|| dirs::home_dir().map(|h| h.join("Music")))
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("GeekBridge Calls")
 }
 
 /// `path` with the home folder written as `~`, for showing to people.
@@ -20,7 +23,11 @@ pub fn tilde(path: &Path) -> String {
 fn tilde_with(path: &Path, home: Option<&Path>) -> String {
     if let Some(home) = home {
         if let Ok(rest) = path.strip_prefix(home) {
-            return if rest.as_os_str().is_empty() { "~".to_string() } else { format!("~/{}", rest.display()) };
+            return if rest.as_os_str().is_empty() {
+                "~".to_string()
+            } else {
+                format!("~/{}", rest.display())
+            };
         }
     }
     path.display().to_string()
@@ -54,22 +61,37 @@ pub fn ensure_dir(path: &Path) -> io::Result<()> {
 
 #[cfg(target_os = "linux")]
 fn open_with_system(path: &Path) -> io::Result<()> {
-    std::process::Command::new("xdg-open").arg(path).stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).spawn().map(|_| ())
+    std::process::Command::new("xdg-open")
+        .arg(path)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .map(|_| ())
 }
 
 #[cfg(target_os = "macos")]
 fn open_with_system(path: &Path) -> io::Result<()> {
-    std::process::Command::new("open").arg(path).spawn().map(|_| ())
+    std::process::Command::new("open")
+        .arg(path)
+        .spawn()
+        .map(|_| ())
 }
 
 #[cfg(target_os = "windows")]
 fn open_with_system(path: &Path) -> io::Result<()> {
-    std::process::Command::new("explorer").arg(path).spawn().map(|_| ())
+    std::process::Command::new("explorer")
+        .arg(path)
+        .spawn()
+        .map(|_| ())
 }
 
 #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
 fn open_with_system(_path: &Path) -> io::Result<()> {
-    Err(io::Error::new(io::ErrorKind::Unsupported, "opening folders is not supported on this system"))
+    Err(io::Error::new(
+        io::ErrorKind::Unsupported,
+        "opening folders is not supported on this system",
+    ))
 }
 
 #[cfg(test)]
@@ -79,10 +101,19 @@ mod tests {
     #[test]
     fn the_home_folder_is_shown_as_a_tilde() {
         let home = Path::new("/home/ana");
-        assert_eq!(tilde_with(Path::new("/home/ana/Music/GeekBridge Calls"), Some(home)), "~/Music/GeekBridge Calls");
+        assert_eq!(
+            tilde_with(Path::new("/home/ana/Music/GeekBridge Calls"), Some(home)),
+            "~/Music/GeekBridge Calls"
+        );
         assert_eq!(tilde_with(Path::new("/home/ana"), Some(home)), "~");
-        assert_eq!(tilde_with(Path::new("/srv/calls"), Some(home)), "/srv/calls");
-        assert_eq!(tilde_with(Path::new("/home/anabel/x"), Some(home)), "/home/anabel/x");
+        assert_eq!(
+            tilde_with(Path::new("/srv/calls"), Some(home)),
+            "/srv/calls"
+        );
+        assert_eq!(
+            tilde_with(Path::new("/home/anabel/x"), Some(home)),
+            "/home/anabel/x"
+        );
         assert_eq!(tilde_with(Path::new("/x"), None), "/x");
     }
 

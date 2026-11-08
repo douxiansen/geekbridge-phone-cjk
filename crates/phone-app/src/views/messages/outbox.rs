@@ -38,8 +38,22 @@ pub struct Outbox {
 
 impl Outbox {
     /// Records a text just handed to the service under `token`.
-    pub fn add_with_token(&mut self, token: u64, key: &str, number: &str, text: &str, at: i64) -> u64 {
-        self.items.push(Outgoing { token, key: key.into(), number: number.into(), text: text.into(), at, delivery: Delivery::Sending });
+    pub fn add_with_token(
+        &mut self,
+        token: u64,
+        key: &str,
+        number: &str,
+        text: &str,
+        at: i64,
+    ) -> u64 {
+        self.items.push(Outgoing {
+            token,
+            key: key.into(),
+            number: number.into(),
+            text: text.into(),
+            at,
+            delivery: Delivery::Sending,
+        });
         token
     }
 
@@ -66,10 +80,6 @@ impl Outbox {
     /// What is outstanding in one conversation, oldest first.
     pub fn entries<'a>(&'a self, key: &'a str) -> impl Iterator<Item = &'a Outgoing> {
         self.items.iter().filter(move |o| o.key == key)
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.items.is_empty()
     }
 }
 
@@ -103,7 +113,7 @@ mod tests {
         assert_eq!(b.entries("a").count(), 1);
         assert_eq!(b.remove(t).map(|o| o.text), Some("x".to_string()));
         assert_eq!(b.entries("a").count(), 0);
-        assert!(!b.is_empty());
+        assert_eq!(b.entries("b").count(), 1);
         assert!(b.remove(t).is_none());
     }
 }

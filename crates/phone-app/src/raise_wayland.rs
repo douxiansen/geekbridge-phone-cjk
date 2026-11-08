@@ -10,8 +10,12 @@
 use wayland_client::globals::{registry_queue_init, GlobalListContents};
 use wayland_client::protocol::{wl_registry, wl_seat};
 use wayland_client::{event_created_child, Connection, Dispatch, QueueHandle};
-use wayland_protocols_wlr::foreign_toplevel::v1::client::zwlr_foreign_toplevel_handle_v1::{self, ZwlrForeignToplevelHandleV1};
-use wayland_protocols_wlr::foreign_toplevel::v1::client::zwlr_foreign_toplevel_manager_v1::{self, ZwlrForeignToplevelManagerV1};
+use wayland_protocols_wlr::foreign_toplevel::v1::client::zwlr_foreign_toplevel_handle_v1::{
+    self, ZwlrForeignToplevelHandleV1,
+};
+use wayland_protocols_wlr::foreign_toplevel::v1::client::zwlr_foreign_toplevel_manager_v1::{
+    self, ZwlrForeignToplevelManagerV1,
+};
 
 /// Why a window could not be raised this way.
 #[derive(Debug, PartialEq, Eq)]
@@ -35,17 +39,43 @@ struct State {
 }
 
 impl Dispatch<wl_registry::WlRegistry, GlobalListContents> for State {
-    fn event(_: &mut Self, _: &wl_registry::WlRegistry, _: wl_registry::Event, _: &GlobalListContents, _: &Connection, _: &QueueHandle<Self>) {}
+    fn event(
+        _: &mut Self,
+        _: &wl_registry::WlRegistry,
+        _: wl_registry::Event,
+        _: &GlobalListContents,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+    ) {
+    }
 }
 
 impl Dispatch<wl_seat::WlSeat, ()> for State {
-    fn event(_: &mut Self, _: &wl_seat::WlSeat, _: wl_seat::Event, _: &(), _: &Connection, _: &QueueHandle<Self>) {}
+    fn event(
+        _: &mut Self,
+        _: &wl_seat::WlSeat,
+        _: wl_seat::Event,
+        _: &(),
+        _: &Connection,
+        _: &QueueHandle<Self>,
+    ) {
+    }
 }
 
 impl Dispatch<ZwlrForeignToplevelManagerV1, ()> for State {
-    fn event(state: &mut Self, _: &ZwlrForeignToplevelManagerV1, event: zwlr_foreign_toplevel_manager_v1::Event, _: &(), _: &Connection, _: &QueueHandle<Self>) {
+    fn event(
+        state: &mut Self,
+        _: &ZwlrForeignToplevelManagerV1,
+        event: zwlr_foreign_toplevel_manager_v1::Event,
+        _: &(),
+        _: &Connection,
+        _: &QueueHandle<Self>,
+    ) {
         if let zwlr_foreign_toplevel_manager_v1::Event::Toplevel { toplevel } = event {
-            state.toplevels.push(Toplevel { handle: toplevel, app_id: String::new() });
+            state.toplevels.push(Toplevel {
+                handle: toplevel,
+                app_id: String::new(),
+            });
         }
     }
 
@@ -55,14 +85,23 @@ impl Dispatch<ZwlrForeignToplevelManagerV1, ()> for State {
 }
 
 impl Dispatch<ZwlrForeignToplevelHandleV1, ()> for State {
-    fn event(state: &mut Self, handle: &ZwlrForeignToplevelHandleV1, event: zwlr_foreign_toplevel_handle_v1::Event, _: &(), _: &Connection, _: &QueueHandle<Self>) {
+    fn event(
+        state: &mut Self,
+        handle: &ZwlrForeignToplevelHandleV1,
+        event: zwlr_foreign_toplevel_handle_v1::Event,
+        _: &(),
+        _: &Connection,
+        _: &QueueHandle<Self>,
+    ) {
         match event {
             zwlr_foreign_toplevel_handle_v1::Event::AppId { app_id } => {
                 if let Some(t) = state.toplevels.iter_mut().find(|t| &t.handle == handle) {
                     t.app_id = app_id;
                 }
             }
-            zwlr_foreign_toplevel_handle_v1::Event::Closed => state.toplevels.retain(|t| &t.handle != handle),
+            zwlr_foreign_toplevel_handle_v1::Event::Closed => {
+                state.toplevels.retain(|t| &t.handle != handle)
+            }
             _ => {}
         }
     }
@@ -75,15 +114,22 @@ pub fn raise(app_id: &str) -> Result<(), RaiseError> {
         return Err(RaiseError::NoWayland);
     }
     let conn = Connection::connect_to_env().map_err(|e| RaiseError::Unsupported(e.to_string()))?;
-    let (globals, mut queue) = registry_queue_init::<State>(&conn).map_err(|e| RaiseError::Unsupported(e.to_string()))?;
+    let (globals, mut queue) =
+        registry_queue_init::<State>(&conn).map_err(|e| RaiseError::Unsupported(e.to_string()))?;
     let qh = queue.handle();
-    let _manager: ZwlrForeignToplevelManagerV1 = globals.bind(&qh, 1..=3, ()).map_err(|e| RaiseError::Unsupported(format!("no foreign-toplevel protocol: {e}")))?;
-    let seat: wl_seat::WlSeat = globals.bind(&qh, 1..=1, ()).map_err(|e| RaiseError::Unsupported(format!("no seat: {e}")))?;
+    let _manager: ZwlrForeignToplevelManagerV1 = globals
+        .bind(&qh, 1..=3, ())
+        .map_err(|e| RaiseError::Unsupported(format!("no foreign-toplevel protocol: {e}")))?;
+    let seat: wl_seat::WlSeat = globals
+        .bind(&qh, 1..=1, ())
+        .map_err(|e| RaiseError::Unsupported(format!("no seat: {e}")))?;
 
     let mut state = State::default();
     // The first round trip announces the windows, the second their app ids.
     for _ in 0..2 {
-        queue.roundtrip(&mut state).map_err(|e| RaiseError::Unsupported(e.to_string()))?;
+        queue
+            .roundtrip(&mut state)
+            .map_err(|e| RaiseError::Unsupported(e.to_string()))?;
     }
     let mut found = false;
     for t in state.toplevels.iter().filter(|t| t.app_id == app_id) {
@@ -91,7 +137,9 @@ pub fn raise(app_id: &str) -> Result<(), RaiseError> {
         t.handle.activate(&seat);
         found = true;
     }
-    queue.roundtrip(&mut state).map_err(|e| RaiseError::Unsupported(e.to_string()))?;
+    queue
+        .roundtrip(&mut state)
+        .map_err(|e| RaiseError::Unsupported(e.to_string()))?;
     if found {
         Ok(())
     } else {

@@ -108,7 +108,9 @@ pub fn socket_dir(fallback: PathBuf) -> PathBuf {
 }
 
 fn dirs_runtime() -> Option<PathBuf> {
-    std::env::var_os("XDG_RUNTIME_DIR").map(PathBuf::from).filter(|p| p.is_dir())
+    std::env::var_os("XDG_RUNTIME_DIR")
+        .map(PathBuf::from)
+        .filter(|p| p.is_dir())
 }
 
 #[cfg(unix)]
@@ -142,7 +144,10 @@ mod unix {
         if reply.trim_end() == format!("ok {HELLO}") {
             Ok(())
         } else {
-            Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "unexpected reply"))
+            Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "unexpected reply",
+            ))
         }
     }
 
@@ -152,18 +157,34 @@ mod unix {
             match forward(&path, request) {
                 Ok(()) => return Role::Secondary,
                 // Nothing there, or a dead socket file left by a crash: take over.
-                Err(e) if matches!(e.kind(), std::io::ErrorKind::NotFound | std::io::ErrorKind::ConnectionRefused) => {
+                Err(e)
+                    if matches!(
+                        e.kind(),
+                        std::io::ErrorKind::NotFound | std::io::ErrorKind::ConnectionRefused
+                    ) =>
+                {
                     let _ = std::fs::remove_file(&path);
                     match UnixListener::bind(&path) {
                         Ok(listener) => {
                             // Keep the file private to this user.
                             use std::os::unix::fs::PermissionsExt;
-                            let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
-                            return Role::Primary(Guard { inner: Some(Bound { listener }), path });
+                            let _ = std::fs::set_permissions(
+                                &path,
+                                std::fs::Permissions::from_mode(0o600),
+                            );
+                            return Role::Primary(Guard {
+                                inner: Some(Bound { listener }),
+                                path,
+                            });
                         }
                         // Another launch won the race: ask it instead.
                         Err(e) if e.kind() == std::io::ErrorKind::AddrInUse => continue,
-                        Err(e) => return Role::Unresponsive(format!("cannot create {}: {e}", path.display())),
+                        Err(e) => {
+                            return Role::Unresponsive(format!(
+                                "cannot create {}: {e}",
+                                path.display()
+                            ))
+                        }
                     }
                 }
                 Err(e) => return Role::Unresponsive(format!("{}: {e}", path.display())),
@@ -174,22 +195,24 @@ mod unix {
 
     pub fn serve(bound: Bound, actions: ActionSender) {
         let Bound { listener } = bound;
-        let spawned = std::thread::Builder::new().name("gbp-instance".into()).spawn(move || {
-            for stream in listener.incoming() {
-                let Ok(mut stream) = stream else { continue };
-                let _ = stream.set_read_timeout(Some(IO_TIMEOUT));
-                let _ = stream.set_write_timeout(Some(IO_TIMEOUT));
-                let mut line = String::new();
-                let read = BufReader::new((&stream).take(MAX_LINE)).read_line(&mut line);
-                if read.is_err() {
-                    continue;
+        let spawned = std::thread::Builder::new()
+            .name("gbp-instance".into())
+            .spawn(move || {
+                for stream in listener.incoming() {
+                    let Ok(mut stream) = stream else { continue };
+                    let _ = stream.set_read_timeout(Some(IO_TIMEOUT));
+                    let _ = stream.set_write_timeout(Some(IO_TIMEOUT));
+                    let mut line = String::new();
+                    let read = BufReader::new((&stream).take(MAX_LINE)).read_line(&mut line);
+                    if read.is_err() {
+                        continue;
+                    }
+                    if let Some(request) = Request::decode(&line) {
+                        actions.send(request.into_action());
+                        let _ = stream.write_all(format!("ok {HELLO}\n").as_bytes());
+                    }
                 }
-                if let Some(request) = Request::decode(&line) {
-                    actions.send(request.into_action());
-                    let _ = stream.write_all(format!("ok {HELLO}\n").as_bytes());
-                }
-            }
-        });
+            });
         if let Err(e) = spawned {
             log::warn!("single-instance listener not started: {e}");
         }
@@ -202,7 +225,11 @@ mod tests {
 
     #[test]
     fn requests_round_trip() {
-        for r in [Request::Show, Request::Open("+213 550 123 456".into()), Request::Dial("+1555".into())] {
+        for r in [
+            Request::Show,
+            Request::Open("+213 550 123 456".into()),
+            Request::Dial("+1555".into()),
+        ] {
             assert_eq!(Request::decode(&r.encode()), Some(r));
         }
     }
@@ -242,7 +269,12 @@ mod tests {
             _ => panic!("second launch should hand over"),
         }
         let got = rx.recv_timeout(std::time::Duration::from_secs(2)).unwrap();
-        assert_eq!(got, UiAction::OpenConversation { number: "+1555".into() });
+        assert_eq!(
+            got,
+            UiAction::OpenConversation {
+                number: "+1555".into()
+            }
+        );
         assert!(woke.load(Ordering::SeqCst));
     }
 
@@ -252,7 +284,10 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         // Bind and drop: leaves the socket file behind with nobody listening.
         drop(std::os::unix::net::UnixListener::bind(dir.path().join("t.sock")).unwrap());
-        assert!(matches!(acquire(dir.path(), "t", &Request::Show), Role::Primary(_)));
+        assert!(matches!(
+            acquire(dir.path(), "t", &Request::Show),
+            Role::Primary(_)
+        ));
     }
 
     #[cfg(unix)]
@@ -266,6 +301,9 @@ mod tests {
                 let _ = s.write_all(b"hello stranger\n");
             }
         });
-        assert!(matches!(acquire(dir.path(), "t", &Request::Show), Role::Unresponsive(_)));
+        assert!(matches!(
+            acquire(dir.path(), "t", &Request::Show),
+            Role::Unresponsive(_)
+        ));
     }
 }

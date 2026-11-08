@@ -16,7 +16,10 @@ pub struct Counter {
 impl Counter {
     pub fn of(text: &str) -> Self {
         let used = text.chars().count();
-        Self { used, left: LIMIT.saturating_sub(used) }
+        Self {
+            used,
+            left: LIMIT.saturating_sub(used),
+        }
     }
 
     /// Whether to show the "used/limit" label: whenever there is a draft.
@@ -85,7 +88,10 @@ mod tests {
         assert!(!Counter::of("hello").emphasised());
         let near = "x".repeat(LIMIT - COUNTER_FROM_LEFT);
         assert!(Counter::of(&near).emphasised());
-        assert_eq!(Counter::of(&near).label(), format!("{}/1000", LIMIT - COUNTER_FROM_LEFT));
+        assert_eq!(
+            Counter::of(&near).label(),
+            format!("{}/1000", LIMIT - COUNTER_FROM_LEFT)
+        );
     }
 
     #[test]
@@ -123,8 +129,14 @@ mod tests {
 
     #[test]
     fn recipients_are_cleaned_or_refused() {
-        assert_eq!(recipient_number("+1 (555) 010-0100").as_deref(), Some("+15550100100"));
-        assert_eq!(recipient_number(" 0612 345 678 ").as_deref(), Some("0612345678"));
+        assert_eq!(
+            recipient_number("+1 (555) 010-0100").as_deref(),
+            Some("+15550100100")
+        );
+        assert_eq!(
+            recipient_number(" 0612 345 678 ").as_deref(),
+            Some("0612345678")
+        );
         assert_eq!(recipient_number("12"), None);
         assert_eq!(recipient_number("Alice"), None);
         assert_eq!(recipient_number("555+0100"), None);

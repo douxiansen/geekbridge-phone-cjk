@@ -35,10 +35,12 @@ pub fn raise_in_background(app_id: &str) {
     #[cfg(target_os = "linux")]
     {
         let app_id = app_id.to_string();
-        let spawned = std::thread::Builder::new().name("gbp-raise".into()).spawn(move || match crate::raise_wayland::raise(&app_id) {
-            Ok(()) => log::debug!("window raised"),
-            Err(e) => log::debug!("window not raised through the compositor: {e:?}"),
-        });
+        let spawned = std::thread::Builder::new()
+            .name("gbp-raise".into())
+            .spawn(move || match crate::raise_wayland::raise(&app_id) {
+                Ok(()) => log::debug!("window raised"),
+                Err(e) => log::debug!("window not raised through the compositor: {e:?}"),
+            });
         if let Err(e) = spawned {
             log::debug!("cannot raise the window: {e}");
         }
@@ -63,7 +65,9 @@ pub fn bring_forward(ctx: &egui::Context) {
         ctx.send_viewport_cmd(ViewportCommand::Minimized(false));
     }
     ctx.send_viewport_cmd(ViewportCommand::Focus);
-    ctx.send_viewport_cmd(ViewportCommand::RequestUserAttention(UserAttentionType::Informational));
+    ctx.send_viewport_cmd(ViewportCommand::RequestUserAttention(
+        UserAttentionType::Informational,
+    ));
 }
 
 #[cfg(test)]

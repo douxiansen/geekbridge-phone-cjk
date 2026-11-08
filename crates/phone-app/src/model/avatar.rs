@@ -8,11 +8,17 @@ pub const COLOURS: usize = 8;
 /// is "DK", "Zoé" is "Z"). `None` when the name has no letters (a bare number), so the UI can draw
 /// a silhouette instead.
 pub fn initials(name: &str) -> Option<String> {
-    let first_letter = |word: &str| word.chars().find(|c| c.is_alphabetic()).map(|c| c.to_uppercase().to_string());
-    let mut words = name.split_whitespace().filter(|w| w.chars().any(char::is_alphabetic));
+    let first_letter = |word: &str| {
+        word.chars()
+            .find(|c| c.is_alphabetic())
+            .map(|c| c.to_uppercase().to_string())
+    };
+    let mut words = name
+        .split_whitespace()
+        .filter(|w| w.chars().any(char::is_alphabetic));
     let first = words.next()?;
     let a = first_letter(first)?;
-    match words.last().and_then(first_letter) {
+    match words.next_back().and_then(first_letter) {
         Some(b) => Some(format!("{a}{b}")),
         None => Some(a),
     }
@@ -65,7 +71,10 @@ mod tests {
             assert_eq!(colour_index(key), colour_index(key));
         }
         // Known value so an accidental change of hash is caught: it would recolour everyone.
-        assert_eq!(colour_index("a"), (0xaf63_dc4c_8601_ec8c_u64 % COLOURS as u64) as usize);
+        assert_eq!(
+            colour_index("a"),
+            (0xaf63_dc4c_8601_ec8c_u64 % COLOURS as u64) as usize
+        );
     }
 
     #[test]

@@ -8,7 +8,9 @@
 //! call, send a quick reply or ask the window to show a conversation.
 
 use crate::action::{ActionSender, UiAction};
+use phone_core::calls::CallState;
 use phone_core::service::Handle;
+use std::time::Instant;
 
 /// What an alert is about, so it can be withdrawn or replaced later.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -30,6 +32,26 @@ pub struct CallNotice {
 }
 
 impl CallNotice {
+    pub fn id(&self) -> NotifyId {
+        NotifyId::Call(self.call_id.clone())
+    }
+}
+
+/// A call that was ringing has been answered, or a call is being placed, answered or put on
+/// hold. Never sent for a ringing call (that is [`CallNotice`]). A notifier that keeps a banner
+/// for the call updates it in place: the ringing banner's buttons become Hang up.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CallUpdate {
+    pub call_id: String,
+    pub number: String,
+    pub name: Option<String>,
+    /// `Dialing`, `Alerting`, `Active` or `Held`.
+    pub state: CallState,
+    /// When the call became active, to drive a timer.
+    pub since: Option<Instant>,
+}
+
+impl CallUpdate {
     pub fn id(&self) -> NotifyId {
         NotifyId::Call(self.call_id.clone())
     }
@@ -69,12 +91,24 @@ impl TextNotice {
 /// Shows alerts. Called from the event thread, never from the UI thread, so it may block briefly,
 /// but should not for long: alerts queue behind it.
 pub trait Notifier: Send {
+    /// A call started ringing.
     fn incoming_call(&self, call: &CallNotice);
+    /// A call changed state without ringing (answered, being placed, held). Optional: the
+    /// default ignores it. An alert for the call from [`Notifier::incoming_call`] is still up
+    /// when this arrives for the answered call; replace or withdraw it.
+    fn call_updated(&self, _call: &CallUpdate) {}
+    /// A call is over. A missed one has `missed` set; the alert for the call was already withdrawn
+    /// with [`Notifier::clear`].
     fn call_ended(&self, call: &CallEndedNotice);
+    /// A text arrived.
     fn text(&self, text: &TextNotice);
-    /// Withdraws an alert that is no longer relevant (the call was answered elsewhere, the
-    /// conversation was opened in the window).
+    /// Withdraws an alert that is no longer relevant (the call ended, or the conversation was
+    /// opened in the window).
     fn clear(&self, id: &NotifyId);
+    /// How a text sent through [`NotifierHost::reply`] went: `token` is what `reply` returned.
+    /// Called for every text sent from the app, the ones the notifier did not send included:
+    /// ignore tokens you do not know. Optional: the default ignores it.
+    fn reply_result(&self, _token: u64, _number: &str, _result: &Result<(), String>) {}
 }
 
 /// Shows nothing. The default off Linux until a native notifier exists, and for tests.
@@ -95,13 +129,33 @@ pub struct LogNotifier;
 
 impl Notifier for LogNotifier {
     fn incoming_call(&self, c: &CallNotice) {
-        log::info!("notify: incoming call from {} ({})", c.name.as_deref().unwrap_or("unknown"), c.number);
+        log::info!(
+            "notify: incoming call from {} ({})",
+            c.name.as_deref().unwrap_or("unknown"),
+            c.number
+        );
+    }
+    fn call_updated(&self, c: &CallUpdate) {
+        log::info!("notify: call {} is now {:?}", c.call_id, c.state);
+    }
+    fn reply_result(&self, token: u64, number: &str, result: &Result<(), String>) {
+        log::info!("notify: reply {token} to {number}: {result:?}");
     }
     fn call_ended(&self, c: &CallEndedNotice) {
-        log::info!("notify: call with {} ended, missed={}, {}s", c.number, c.missed, c.seconds);
+        log::info!(
+            "notify: call with {} ended, missed={}, {}s",
+            c.number,
+            c.missed,
+            c.seconds
+        );
     }
     fn text(&self, t: &TextNotice) {
-        log::info!("notify: text from {} ({}): {}", t.name.as_deref().unwrap_or("unknown"), t.number, t.body);
+        log::info!(
+            "notify: text from {} ({}): {}",
+            t.name.as_deref().unwrap_or("unknown"),
+            t.number,
+            t.body
+        );
     }
     fn clear(&self, id: &NotifyId) {
         log::info!("notify: clear {id:?}");
@@ -139,7 +193,9 @@ impl NotifierHost {
 
     /// Brings the window forward on the conversation with `number`.
     pub fn open_conversation(&self, number: &str) {
-        self.actions.send(UiAction::OpenConversation { number: number.to_string() });
+        self.actions.send(UiAction::OpenConversation {
+            number: number.to_string(),
+        });
     }
 
     /// Brings the window forward as it is.

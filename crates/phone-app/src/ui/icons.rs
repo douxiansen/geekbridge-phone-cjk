@@ -4,7 +4,7 @@
 //! Vendored from the GeekBridge design system (`bridge-apps/src/icons.rs`, same licence) with
 //! the icons this app needs added: hang up, close, search, call arrows and a warning mark.
 use eframe::egui::{
-    Color32, CornerRadius, Painter, Pos2, Rect, Shape, Stroke, StrokeKind, pos2, vec2,
+    pos2, vec2, Color32, CornerRadius, Painter, Pos2, Rect, Shape, Stroke, StrokeKind,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

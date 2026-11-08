@@ -50,7 +50,11 @@ impl Offsets {
         if y < 0.0 || y >= self.total() || self.is_empty() {
             return None;
         }
-        Some(self.starts[1..].partition_point(|end| *end <= y).min(self.len() - 1))
+        Some(
+            self.starts[1..]
+                .partition_point(|end| *end <= y)
+                .min(self.len() - 1),
+        )
     }
 
     /// The rows that touch the vertical span `top..bottom`.
@@ -59,7 +63,9 @@ impl Offsets {
         // First row whose bottom edge is below `top`.
         let first = self.starts[1..].partition_point(|end| *end <= top).min(n);
         // One past the last row whose top edge is above `bottom`.
-        let last = self.starts[..n].partition_point(|start| *start < bottom).max(first);
+        let last = self.starts[..n]
+            .partition_point(|start| *start < bottom)
+            .max(first);
         first..last
     }
 }

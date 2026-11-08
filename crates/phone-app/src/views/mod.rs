@@ -53,6 +53,8 @@ impl Cx<'_> {
     }
 
     pub fn new_message_to(&mut self, number: &str) {
-        self.cmds.push(Cmd::NewMessage { to: Some(number.to_string()) });
+        self.cmds.push(Cmd::NewMessage {
+            to: Some(number.to_string()),
+        });
     }
 }

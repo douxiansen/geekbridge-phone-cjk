@@ -15,7 +15,10 @@ use crate::pump;
 use crate::shared::Shared;
 use crate::state::{UiState, UiStore};
 use crate::ui::theme;
-use crate::views::{call_card, contacts::ContactsState, keypad::KeypadState, messages::MessagesState, recents::RecentsState, settings::SettingsState, Cmd, Cx};
+use crate::views::{
+    call_card, contacts::ContactsState, keypad::KeypadState, messages::MessagesState,
+    recents::RecentsState, settings::SettingsState, Cmd, Cx,
+};
 use crate::window::{self, CloseAction};
 use eframe::egui::{self, Frame, Key, Margin, Modifiers, ThemePreference, ViewportCommand};
 use phone_core::platform::Platform;
@@ -117,7 +120,8 @@ impl App {
         let shared = Arc::new(Shared::default());
         let app_id = boot.app_id;
         let (actions_tx, actions) = ActionSender::new(wake.clone());
-        let actions_tx = actions_tx.with_raise(Arc::new(move || window::raise_in_background(app_id)));
+        let actions_tx =
+            actions_tx.with_raise(Arc::new(move || window::raise_in_background(app_id)));
         let mut guard = boot.guard;
         if let Some(g) = guard.as_mut() {
             g.serve(actions_tx.clone());
@@ -126,13 +130,15 @@ impl App {
         if let Some(action) = boot.initial {
             actions_tx.send(action);
         }
-        let host = NotifierHost { handle: handle.clone(), actions: actions_tx };
-        #[allow(unused_mut)]
-        let mut quiet_demo = false;
+        let host = NotifierHost {
+            handle: handle.clone(),
+            actions: actions_tx,
+        };
+        // The demo's alerts go to the log, so a simulated call never pops up on the real desktop.
         #[cfg(feature = "demo")]
-        {
-            quiet_demo = boot.demo.is_some() && !boot.demo_real_alerts;
-        }
+        let quiet_demo = boot.demo.is_some() && !boot.demo_real_alerts;
+        #[cfg(not(feature = "demo"))]
+        let quiet_demo = false;
         let notifier = match boot.notifier {
             Some(factory) => factory(host),
             None if quiet_demo => Box::new(LogNotifier),
@@ -257,7 +263,9 @@ impl App {
         }
         // Enter answers a ringing call when nothing else is using the key.
         if let Some(ringing) = live.ringing() {
-            if !ctx.wants_keyboard_input() && ctx.input_mut(|inp| inp.consume_key(Modifiers::NONE, Key::Enter)) {
+            if !ctx.wants_keyboard_input()
+                && ctx.input_mut(|inp| inp.consume_key(Modifiers::NONE, Key::Enter))
+            {
                 self.handle.answer(&ringing.call.id);
             }
         }
@@ -278,8 +286,13 @@ impl App {
     /// Steps the screenshot tour: every few seconds, the next screen.
     #[cfg(feature = "demo")]
     fn tour_step(&mut self, ctx: &egui::Context) {
-        let Some((since, step)) = self.tour else { return };
-        let secs: u64 = std::env::var("GBP_TOUR_STEP_SECS").ok().and_then(|s| s.parse().ok()).unwrap_or(3);
+        let Some((since, step)) = self.tour else {
+            return;
+        };
+        let secs: u64 = std::env::var("GBP_TOUR_STEP_SECS")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(3);
         // The first step waits for the demo phone's data to arrive.
         if since.elapsed() < Duration::from_secs(secs * (step as u64 + 1)) {
             ctx.request_repaint_after(Duration::from_millis(300));
@@ -300,6 +313,16 @@ impl App {
             4 => {
                 self.goto(Tab::Messages);
                 self.messages.open_conversation(known);
+                self.messages.demo_outgoing(
+                    known,
+                    "On my way, save me a seat",
+                    crate::views::messages::Delivery::Sending,
+                );
+                self.messages.demo_outgoing(
+                    known,
+                    "Can you send the address again?",
+                    crate::views::messages::Delivery::Failed("No phone is connected.".into()),
+                );
             }
             5 => {
                 self.goto(Tab::Messages);
@@ -307,6 +330,10 @@ impl App {
             }
             6 => self.goto(Tab::Settings),
             7 => self.goto(Tab::Recents),
+            // Checks closing the window: with "keep running" on it must minimise, not quit.
+            8 if std::env::var_os("GBP_TOUR_CLOSE").is_some() => {
+                ctx.send_viewport_cmd(ViewportCommand::Close);
+            }
             _ => {
                 self.tour = None;
                 return;
@@ -319,40 +346,67 @@ impl App {
     #[cfg(feature = "demo")]
     fn demo_menu(&mut self, ctx: &egui::Context) {
         use crate::demo::{KNOWN_NUMBER, UNKNOWN_NUMBER};
-        let Some(demo) = self.demo.clone() else { return };
+        let Some(demo) = self.demo.clone() else {
+            return;
+        };
         let pal = theme::current(ctx);
-        egui::TopBottomPanel::top("demo-menu").exact_height(26.0).frame(Frame::new().fill(pal.toolbar).inner_margin(Margin::symmetric(8, 0))).show(ctx, |ui| {
-            egui::menu::bar(ui, |ui| {
-                ui.menu_button("Help", |ui| {
-                    if ui.button("Simulate incoming call (contact)").clicked() {
-                        demo.ring(KNOWN_NUMBER);
-                        ui.close_menu();
-                    }
-                    if ui.button("Simulate incoming call (unknown number)").clicked() {
-                        demo.ring(UNKNOWN_NUMBER);
-                        ui.close_menu();
-                    }
-                    if ui.button("Simulate missed call").clicked() {
-                        demo.miss(KNOWN_NUMBER);
-                        ui.close_menu();
-                    }
-                    if ui.button("End call").clicked() {
-                        demo.end_call();
-                        ui.close_menu();
-                    }
-                    ui.separator();
-                    if ui.button("Simulate text (contact)").clicked() {
-                        demo.text(KNOWN_NUMBER, "Table is ready, come whenever you like");
-                        ui.close_menu();
-                    }
-                    if ui.button("Simulate text (unknown number)").clicked() {
-                        demo.text(UNKNOWN_NUMBER, "Your verification code is 482913. It expires in 10 minutes.");
-                        ui.close_menu();
-                    }
+        egui::TopBottomPanel::top("demo-menu")
+            .exact_height(26.0)
+            .frame(
+                Frame::new()
+                    .fill(pal.toolbar)
+                    .inner_margin(Margin::symmetric(8, 0)),
+            )
+            .show(ctx, |ui| {
+                egui::menu::bar(ui, |ui| {
+                    ui.menu_button("Help", |ui| {
+                        if ui.button("Simulate incoming call (contact)").clicked() {
+                            demo.ring(KNOWN_NUMBER);
+                            ui.close_menu();
+                        }
+                        if ui
+                            .button("Simulate incoming call (unknown number)")
+                            .clicked()
+                        {
+                            demo.ring(UNKNOWN_NUMBER);
+                            ui.close_menu();
+                        }
+                        if ui.button("Simulate missed call").clicked() {
+                            demo.miss(KNOWN_NUMBER);
+                            ui.close_menu();
+                        }
+                        let label = if demo.is_connected() {
+                            "Disconnect the phone"
+                        } else {
+                            "Reconnect the phone"
+                        };
+                        if ui.button(label).clicked() {
+                            demo.set_connected(!demo.is_connected());
+                            ui.close_menu();
+                        }
+                        if ui.button("End call").clicked() {
+                            demo.end_call();
+                            ui.close_menu();
+                        }
+                        ui.separator();
+                        if ui.button("Simulate text (contact)").clicked() {
+                            demo.text(KNOWN_NUMBER, "Table is ready, come whenever you like");
+                            ui.close_menu();
+                        }
+                        if ui.button("Simulate text (unknown number)").clicked() {
+                            demo.text(
+                                UNKNOWN_NUMBER,
+                                "Your verification code is 482913. It expires in 10 minutes.",
+                            );
+                            ui.close_menu();
+                        }
+                    });
+                    ui.label(theme::caption(
+                        &pal,
+                        "Demo mode: a fake phone, nothing is real",
+                    ));
                 });
-                ui.label(theme::caption(&pal, "Demo mode: a fake phone, nothing is real"));
             });
-        });
     }
 }
 
@@ -386,7 +440,8 @@ impl eframe::App for App {
         let off = local_offset(now);
         let pal = theme::current(ctx);
         let focused = ctx.input(|i| i.viewport().focused.unwrap_or(true));
-        self.shared.set_watching_messages(focused && self.tab == Tab::Messages);
+        self.shared
+            .set_watching_messages(focused && self.tab == Tab::Messages);
 
         #[cfg(feature = "demo")]
         {
@@ -410,30 +465,46 @@ impl eframe::App for App {
             self.handle.send(Command::ReloadContacts);
         }
 
-        let active_problems = problems(live.phone.as_ref(), &live.messages_status, &live.contacts_status);
+        let active_problems = problems(
+            live.phone.as_ref(),
+            &live.messages_status,
+            &live.contacts_status,
+        );
         self.notices.expire(now_instant, &active_problems);
 
         let mut cmds: Vec<Cmd> = Vec::new();
-        egui::CentralPanel::default().frame(Frame::new().fill(pal.content).inner_margin(Margin::ZERO)).show(ctx, |ui| {
-            banners::show(ui, &pal, &self.handle, &active_problems, &mut self.notices);
-            let mut cx = Cx { pal, handle: &self.handle, data: &self.data, live: &live, now, off, cmds: &mut cmds };
-            if !live.calls.is_empty() {
-                Frame::new().inner_margin(Margin::symmetric(theme::S3 as i8, 0)).show(ui, |ui| {
-                    ui.add_space(theme::S3);
-                    for call in &live.calls {
-                        call_card::show(ui, &mut cx, call, self.tab == Tab::Keypad);
-                        ui.add_space(theme::S2);
-                    }
-                });
-            }
-            match self.tab {
-                Tab::Keypad => self.keypad.show(ui, &mut cx),
-                Tab::Contacts => self.contacts.show(ui, &mut cx),
-                Tab::Recents => self.recents.show(ui, &mut cx),
-                Tab::Messages => self.messages.show(ui, &mut cx, &mut self.ui_state),
-                Tab::Settings => self.settings.show(ui, &mut cx),
-            }
-        });
+        egui::CentralPanel::default()
+            .frame(Frame::new().fill(pal.content).inner_margin(Margin::ZERO))
+            .show(ctx, |ui| {
+                banners::show(ui, &pal, &self.handle, &active_problems, &mut self.notices);
+                let mut cx = Cx {
+                    pal,
+                    handle: &self.handle,
+                    data: &self.data,
+                    live: &live,
+                    now,
+                    off,
+                    cmds: &mut cmds,
+                };
+                if !live.calls.is_empty() {
+                    Frame::new()
+                        .inner_margin(Margin::symmetric(theme::S3 as i8, 0))
+                        .show(ui, |ui| {
+                            ui.add_space(theme::S3);
+                            for call in &live.calls {
+                                call_card::show(ui, &mut cx, call, self.tab == Tab::Keypad);
+                                ui.add_space(theme::S2);
+                            }
+                        });
+                }
+                match self.tab {
+                    Tab::Keypad => self.keypad.show(ui, &mut cx),
+                    Tab::Contacts => self.contacts.show(ui, &mut cx),
+                    Tab::Recents => self.recents.show(ui, &mut cx),
+                    Tab::Messages => self.messages.show(ui, &mut cx, &mut self.ui_state),
+                    Tab::Settings => self.settings.show(ui, &mut cx),
+                }
+            });
 
         for cmd in cmds {
             match cmd {

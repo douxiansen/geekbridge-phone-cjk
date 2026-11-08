@@ -6,12 +6,14 @@ mod list;
 mod outbox;
 mod thread;
 
+pub use outbox::Delivery;
+
 use super::Cx;
 use crate::model::compose;
 use crate::shared::TextOutcome;
 use crate::state::UiState;
 use crate::ui::vlist::VListState;
-use eframe::egui::{self, Rect, Sense, Ui, UiBuilder, vec2};
+use eframe::egui::{self, vec2, Rect, Sense, Ui, UiBuilder};
 use outbox::Outbox;
 use phone_core::contacts::number_key;
 use std::collections::HashMap;
@@ -43,7 +45,10 @@ pub struct MessagesState {
 impl MessagesState {
     /// Shows the conversation with `number`, existing or not, and puts the cursor in the composer.
     pub fn open_conversation(&mut self, number: &str) {
-        self.selected = Some(Selection { key: number_key(number), number: number.to_string() });
+        self.selected = Some(Selection {
+            key: number_key(number),
+            number: number.to_string(),
+        });
         self.new_to = None;
         self.focus_composer = true;
     }
@@ -57,6 +62,22 @@ impl MessagesState {
                 self.selected = None;
                 self.focus_to = true;
             }
+        }
+    }
+
+    /// Demo screenshots: puts a text of ours in the conversation in the given state, as if sent.
+    #[cfg(feature = "demo")]
+    pub fn demo_outgoing(&mut self, number: &str, text: &str, delivery: Delivery) {
+        let token = 9_000_000 + self.outbox.entries(&number_key(number)).count() as u64;
+        self.outbox.add_with_token(
+            token,
+            &number_key(number),
+            number,
+            text,
+            crate::model::format::unix_now(),
+        );
+        if let Delivery::Failed(why) = delivery {
+            self.outbox.settle(token, &Err(why));
         }
     }
 
@@ -84,7 +105,10 @@ impl MessagesState {
             .into_iter()
             .filter_map(|o| match self.outbox.settle(o.token, &o.result) {
                 true => None,
-                false => o.result.err().map(|e| format!("Could not send the text to {}: {e}", o.number)),
+                false => o
+                    .result
+                    .err()
+                    .map(|e| format!("Could not send the text to {}: {e}", o.number)),
             })
             .collect()
     }
@@ -100,7 +124,16 @@ impl MessagesState {
             }
         } else {
             let split = full.left() + LIST_WIDTH;
-            (Some(Rect::from_min_max(full.min, egui::pos2(split, full.bottom()))), Some(Rect::from_min_max(egui::pos2(split + 1.0, full.top()), full.max)))
+            (
+                Some(Rect::from_min_max(
+                    full.min,
+                    egui::pos2(split, full.bottom()),
+                )),
+                Some(Rect::from_min_max(
+                    egui::pos2(split + 1.0, full.top()),
+                    full.max,
+                )),
+            )
         };
         if let Some(r) = list_rect {
             ui.scope_builder(UiBuilder::new().max_rect(r), |ui| {
@@ -109,7 +142,11 @@ impl MessagesState {
             });
         }
         if let (Some(l), Some(_)) = (list_rect, detail_rect) {
-            ui.painter().vline(l.right() + 0.5, full.y_range(), egui::Stroke::new(1.0_f32, cx.pal.separator));
+            ui.painter().vline(
+                l.right() + 0.5,
+                full.y_range(),
+                egui::Stroke::new(1.0_f32, cx.pal.separator),
+            );
         }
         if let Some(r) = detail_rect {
             ui.scope_builder(UiBuilder::new().max_rect(r), |ui| {
@@ -142,7 +179,10 @@ mod tests {
         let mut s = MessagesState::default();
         s.new_message(Some("+1 (555) 010-0100"));
         assert!(s.new_to.is_none());
-        assert_eq!(s.selected.as_ref().map(|x| x.number.as_str()), Some("+15550100100"));
+        assert_eq!(
+            s.selected.as_ref().map(|x| x.number.as_str()),
+            Some("+15550100100")
+        );
     }
 
     #[test]
@@ -170,12 +210,27 @@ mod tests {
         let mut s = MessagesState::default();
         let token = s.outbox.add_with_token(7, "k", "+1", "hi", 1);
         let out = vec![
-            TextOutcome { token, number: "+1".into(), result: Err("no link".into()) },
-            TextOutcome { token: 999, number: "+2".into(), result: Err("no phone".into()) },
-            TextOutcome { token: 998, number: "+3".into(), result: Ok(()) },
+            TextOutcome {
+                token,
+                number: "+1".into(),
+                result: Err("no link".into()),
+            },
+            TextOutcome {
+                token: 999,
+                number: "+2".into(),
+                result: Err("no phone".into()),
+            },
+            TextOutcome {
+                token: 998,
+                number: "+3".into(),
+                result: Ok(()),
+            },
         ];
         let notices = s.apply_outcomes(out);
-        assert_eq!(notices, vec!["Could not send the text to +2: no phone".to_string()]);
+        assert_eq!(
+            notices,
+            vec!["Could not send the text to +2: no phone".to_string()]
+        );
         assert!(s.outbox.entries("k").any(|o| o.failure().is_some()));
     }
 }

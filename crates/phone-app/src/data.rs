@@ -57,7 +57,15 @@ impl Live {
         Self {
             phone: st.phone.clone(),
             phones: st.phones.clone(),
-            calls: st.calls.iter().cloned().map(|call| CallView { call, recording: false }).collect(),
+            calls: st
+                .calls
+                .iter()
+                .cloned()
+                .map(|call| CallView {
+                    call,
+                    recording: false,
+                })
+                .collect(),
             contacts_status: st.contacts_status.clone(),
             messages_status: st.messages_status.clone(),
             settings: st.settings.clone(),
@@ -102,7 +110,11 @@ impl ViewData {
     /// Re-reads whatever changed since the last call. Returns true when something did.
     pub fn refresh(&mut self, handle: &Handle, shared: &Shared) -> bool {
         let now = shared.generations();
-        let seen = self.seen.unwrap_or(Generations { contacts: u64::MAX, conversations: u64::MAX, recents: u64::MAX });
+        let seen = self.seen.unwrap_or(Generations {
+            contacts: u64::MAX,
+            conversations: u64::MAX,
+            recents: u64::MAX,
+        });
         if seen == now && self.seen.is_some() {
             return false;
         }
@@ -138,7 +150,15 @@ impl ViewData {
 
     /// The name for a number, or the number itself.
     pub fn display(&self, number: &str) -> String {
-        self.name_for(number).map_or_else(|| number.to_string(), str::to_string)
+        self.name_for(number)
+            .map_or_else(|| number.to_string(), str::to_string)
+    }
+
+    /// What picks a person's avatar colour: their name when the number is in the phonebook, else
+    /// the number. The same person then has the same colour on every screen.
+    pub fn avatar_key(&self, number: &str) -> String {
+        self.name_for(number)
+            .map_or_else(|| number_key(number), str::to_string)
     }
 
     pub fn conversation(&self, key: &str) -> Option<&Conversation> {
@@ -162,13 +182,19 @@ mod tests {
     use super::*;
 
     fn contact(name: &str, numbers: &[&str]) -> Contact {
-        Contact { name: name.into(), numbers: numbers.iter().map(|n| n.to_string()).collect() }
+        Contact {
+            name: name.into(),
+            numbers: numbers.iter().map(|n| n.to_string()).collect(),
+        }
     }
 
     #[test]
     fn names_are_found_however_the_number_is_written() {
         let idx = name_index(&[contact("Mara", &["+40 722 123 456", "0722123457"])]);
-        let data = ViewData { names: idx, ..ViewData::default() };
+        let data = ViewData {
+            names: idx,
+            ..ViewData::default()
+        };
         assert_eq!(data.name_for("+40722123456"), Some("Mara"));
         assert_eq!(data.name_for("0722-123-457"), Some("Mara"));
         assert_eq!(data.name_for("+40722000000"), None);
@@ -177,21 +203,55 @@ mod tests {
     }
 
     #[test]
+    fn a_person_has_one_avatar_key_however_their_number_is_written() {
+        let idx = name_index(&[contact("Mara", &["+40 722 123 456"])]);
+        let data = ViewData {
+            names: idx,
+            ..ViewData::default()
+        };
+        assert_eq!(data.avatar_key("0722123456"), "Mara");
+        assert_eq!(data.avatar_key("+40722123456"), "Mara");
+        // A stranger is keyed by number, again in any notation.
+        assert_eq!(
+            data.avatar_key("+1 (555) 010-0199"),
+            data.avatar_key("5550100199")
+        );
+    }
+
+    #[test]
     fn the_first_contact_keeps_a_shared_number() {
         let idx = name_index(&[contact("A", &["+1555010"]), contact("B", &["+1555010"])]);
-        assert_eq!(idx.get(&number_key("+1555010")).map(String::as_str), Some("A"));
+        assert_eq!(
+            idx.get(&number_key("+1555010")).map(String::as_str),
+            Some("A")
+        );
     }
 
     #[test]
     fn calls_know_their_state() {
-        let call = |state| CallView { call: ActiveCall { id: "c".into(), state, number: "1".into(), name: None, since: None }, recording: false };
+        let call = |state| CallView {
+            call: ActiveCall {
+                id: "c".into(),
+                state,
+                number: "1".into(),
+                name: None,
+                since: None,
+            },
+            recording: false,
+        };
         assert!(call(CallState::Incoming).is_ringing());
         assert!(call(CallState::Active).is_active());
         assert!(call(CallState::Held).is_active());
         assert!(!call(CallState::Dialing).is_active());
-        let live = Live { calls: vec![call(CallState::Dialing), call(CallState::Active)], ..Live::default() };
+        let live = Live {
+            calls: vec![call(CallState::Dialing), call(CallState::Active)],
+            ..Live::default()
+        };
         assert!(live.in_call());
-        assert_eq!(live.active_call().map(|c| c.call.state), Some(CallState::Active));
+        assert_eq!(
+            live.active_call().map(|c| c.call.state),
+            Some(CallState::Active)
+        );
         assert!(live.ringing().is_none());
     }
 }

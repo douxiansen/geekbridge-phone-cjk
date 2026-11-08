@@ -8,9 +8,9 @@
 
 use super::icons::{self, Icon};
 use eframe::egui::{
-    self, Color32, CornerRadius, FontData, FontDefinitions, FontFamily, FontId, Frame, Margin,
-    Response, RichText, Sense, Stroke, StrokeKind, TextStyle, Theme, Ui, Visuals, WidgetInfo,
-    WidgetType, vec2,
+    self, vec2, Color32, CornerRadius, FontData, FontDefinitions, FontFamily, FontId, Frame,
+    Margin, Response, RichText, Sense, Stroke, StrokeKind, TextStyle, Theme, Ui, Visuals,
+    WidgetInfo, WidgetType,
 };
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -96,7 +96,8 @@ pub fn high_contrast() -> bool {
 /// `GEEKBRIDGE_HIGH_CONTRAST=1`, or a GTK theme whose name says high contrast, asks for it.
 pub fn high_contrast_requested() -> bool {
     let env = |k: &str| std::env::var(k).unwrap_or_default();
-    env("GEEKBRIDGE_HIGH_CONTRAST") == "1" || env("GTK_THEME").to_lowercase().contains("highcontrast")
+    env("GEEKBRIDGE_HIGH_CONTRAST") == "1"
+        || env("GTK_THEME").to_lowercase().contains("highcontrast")
 }
 
 /// Same layout, but secondary text becomes full ink and every edge and unlit dot a strong mid
@@ -197,7 +198,10 @@ fn candidate_faces() -> Vec<Face> {
     vec![
         Face {
             regular: paths(&["C:\\Windows\\Fonts\\segoeui.ttf"]),
-            bold: paths(&["C:\\Windows\\Fonts\\segoeuib.ttf", "C:\\Windows\\Fonts\\seguisb.ttf"]),
+            bold: paths(&[
+                "C:\\Windows\\Fonts\\segoeuib.ttf",
+                "C:\\Windows\\Fonts\\seguisb.ttf",
+            ]),
         },
         // macOS: San Francisco ships as one variable file; the bold slot reuses it.
         Face {
@@ -229,8 +233,14 @@ fn candidate_faces() -> Vec<Face> {
             ]),
         },
         Face {
-            regular: paths(&["/usr/share/fonts/TTF/DejaVuSans.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"]),
-            bold: paths(&["/usr/share/fonts/TTF/DejaVuSans-Bold.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"]),
+            regular: paths(&[
+                "/usr/share/fonts/TTF/DejaVuSans.ttf",
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            ]),
+            bold: paths(&[
+                "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf",
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+            ]),
         },
     ]
 }
@@ -239,21 +249,37 @@ fn read_font(candidates: &[PathBuf]) -> Option<Vec<u8>> {
     candidates.iter().find_map(|path| {
         let meta = std::fs::metadata(path).ok()?;
         // Skip anything that is not a plausibly sized font file.
-        (meta.is_file() && meta.len() < 32 * 1024 * 1024).then(|| std::fs::read(path).ok()).flatten()
+        (meta.is_file() && meta.len() < 32 * 1024 * 1024)
+            .then(|| std::fs::read(path).ok())
+            .flatten()
     })
 }
 
 /// Fonts embedded in the binary (licences next to them in `assets/fonts`).
 const EMBEDDED_FONTS: [(&str, &[u8]); 4] = [
-    ("noto-sans", include_bytes!("../../assets/fonts/NotoSans-Regular-subset.ttf")),
-    ("noto-emoji", include_bytes!("../../assets/fonts/NotoEmoji-Regular.ttf")),
-    ("hack", include_bytes!("../../assets/fonts/Hack-Regular.ttf")),
-    ("emoji-icon-font", include_bytes!("../../assets/fonts/emoji-icon-font.ttf")),
+    (
+        "noto-sans",
+        include_bytes!("../../assets/fonts/NotoSans-Regular-subset.ttf"),
+    ),
+    (
+        "noto-emoji",
+        include_bytes!("../../assets/fonts/NotoEmoji-Regular.ttf"),
+    ),
+    (
+        "hack",
+        include_bytes!("../../assets/fonts/Hack-Regular.ttf"),
+    ),
+    (
+        "emoji-icon-font",
+        include_bytes!("../../assets/fonts/emoji-icon-font.ttf"),
+    ),
 ];
 
 fn embed_fonts(fonts: &mut FontDefinitions) {
     for (name, bytes) in EMBEDDED_FONTS {
-        fonts.font_data.insert(name.into(), Arc::new(FontData::from_static(bytes)));
+        fonts
+            .font_data
+            .insert(name.into(), Arc::new(FontData::from_static(bytes)));
     }
     let proportional = fonts.families.entry(FontFamily::Proportional).or_default();
     proportional.extend(["noto-sans", "noto-emoji", "emoji-icon-font"].map(String::from));
@@ -272,12 +298,21 @@ pub fn install_fonts(ctx: &egui::Context) {
         let Some(regular) = read_font(&face.regular) else {
             continue;
         };
-        fonts.font_data.insert("system-regular".into(), Arc::new(FontData::from_owned(regular)));
+        fonts.font_data.insert(
+            "system-regular".into(),
+            Arc::new(FontData::from_owned(regular)),
+        );
         if let Some(bold) = read_font(&face.bold) {
-            fonts.font_data.insert("system-bold".into(), Arc::new(FontData::from_owned(bold)));
+            fonts
+                .font_data
+                .insert("system-bold".into(), Arc::new(FontData::from_owned(bold)));
             bold_name = Some("system-bold".to_owned());
         }
-        fonts.families.entry(FontFamily::Proportional).or_default().insert(0, "system-regular".into());
+        fonts
+            .families
+            .entry(FontFamily::Proportional)
+            .or_default()
+            .insert(0, "system-regular".into());
         break;
     }
     // A fuller monochrome emoji face from the system, when there is one, ahead of the small
@@ -290,15 +325,26 @@ pub fn install_fonts(ctx: &egui::Context) {
     ];
     if !bundled_only {
         if let Some(bytes) = read_font(&paths(&emoji_paths)) {
-            fonts.font_data.insert("system-emoji".into(), Arc::new(FontData::from_owned(bytes)));
+            fonts
+                .font_data
+                .insert("system-emoji".into(), Arc::new(FontData::from_owned(bytes)));
             let family = fonts.families.entry(FontFamily::Proportional).or_default();
-            let at = family.iter().position(|n| n == "noto-emoji").unwrap_or(family.len());
+            let at = family
+                .iter()
+                .position(|n| n == "noto-emoji")
+                .unwrap_or(family.len());
             family.insert(at, "system-emoji".into());
         }
     }
     // Semibold falls back to the regular face when no bold exists.
     let mut semibold: Vec<String> = bold_name.into_iter().collect();
-    semibold.extend(fonts.families.get(&FontFamily::Proportional).cloned().unwrap_or_default());
+    semibold.extend(
+        fonts
+            .families
+            .get(&FontFamily::Proportional)
+            .cloned()
+            .unwrap_or_default(),
+    );
     fonts.families.insert(semibold_family(), semibold);
     ctx.set_fonts(fonts);
 }
@@ -313,14 +359,20 @@ pub fn apply(ctx: &egui::Context) {
     for (theme, dark) in [(Theme::Light, false), (Theme::Dark, true)] {
         let pal = palette(dark);
         ctx.style_mut_of(theme, |style| {
-            let mut v = if dark { Visuals::dark() } else { Visuals::light() };
+            let mut v = if dark {
+                Visuals::dark()
+            } else {
+                Visuals::light()
+            };
             v.panel_fill = pal.content;
             v.window_fill = pal.content;
             v.extreme_bg_color = pal.surface;
             v.faint_bg_color = pal.control;
             v.override_text_color = Some(pal.text);
             v.hyperlink_color = pal.accent;
-            v.selection.bg_fill = pal.accent_fill.gamma_multiply(if dark { 0.5 } else { 0.28 });
+            v.selection.bg_fill = pal
+                .accent_fill
+                .gamma_multiply(if dark { 0.5 } else { 0.28 });
             v.selection.stroke = Stroke::new(1.0_f32, pal.accent);
             v.text_cursor.stroke = Stroke::new(1.5_f32, pal.accent);
             let radius = CornerRadius::same(12);
@@ -362,9 +414,18 @@ pub fn apply(ctx: &egui::Context) {
             style.text_styles = [
                 (TextStyle::Heading, FontId::new(22.0, semibold_family())),
                 (TextStyle::Body, FontId::new(14.0, FontFamily::Proportional)),
-                (TextStyle::Button, FontId::new(14.0, FontFamily::Proportional)),
-                (TextStyle::Small, FontId::new(12.0, FontFamily::Proportional)),
-                (TextStyle::Monospace, FontId::new(13.0, FontFamily::Monospace)),
+                (
+                    TextStyle::Button,
+                    FontId::new(14.0, FontFamily::Proportional),
+                ),
+                (
+                    TextStyle::Small,
+                    FontId::new(12.0, FontFamily::Proportional),
+                ),
+                (
+                    TextStyle::Monospace,
+                    FontId::new(13.0, FontFamily::Monospace),
+                ),
             ]
             .into();
         });
@@ -392,19 +453,35 @@ pub fn caption(pal: &Palette, text: impl Into<String>) -> RichText {
 
 /// Small uppercase section label.
 pub fn overline(pal: &Palette, text: &str) -> RichText {
-    RichText::new(text.to_uppercase()).font(FontId::new(12.0, semibold_family())).color(pal.text3)
+    RichText::new(text.to_uppercase())
+        .font(FontId::new(12.0, semibold_family()))
+        .color(pal.text3)
 }
 
 // ---------------------------------------------------------------- structure
 
 /// Unified toolbar across the top of the content area with a hairline underneath.
-pub fn toolbar<R>(ctx: &egui::Context, pal: &Palette, height: f32, add: impl FnOnce(&mut Ui) -> R) -> R {
+pub fn toolbar<R>(
+    ctx: &egui::Context,
+    pal: &Palette,
+    height: f32,
+    add: impl FnOnce(&mut Ui) -> R,
+) -> R {
     egui::TopBottomPanel::top("toolbar")
         .exact_height(height)
-        .frame(Frame::new().fill(pal.toolbar).stroke(Stroke::NONE).inner_margin(Margin::symmetric(12, 0)))
+        .frame(
+            Frame::new()
+                .fill(pal.toolbar)
+                .stroke(Stroke::NONE)
+                .inner_margin(Margin::symmetric(12, 0)),
+        )
         .show(ctx, |ui| {
             let r = ui.max_rect();
-            ui.painter().hline(r.x_range().expand(12.0), r.bottom() + 0.5, Stroke::new(1.0_f32, pal.separator));
+            ui.painter().hline(
+                r.x_range().expand(12.0),
+                r.bottom() + 0.5,
+                Stroke::new(1.0_f32, pal.separator),
+            );
             add(ui)
         })
         .inner
@@ -438,12 +515,18 @@ pub fn focus_color(pal: &Palette) -> Color32 {
 
 /// 2 pt ring one point outside `rect`.
 pub fn focus_ring(ui: &Ui, pal: &Palette, rect: egui::Rect, radius: impl Into<CornerRadius>) {
-    ui.painter().rect_stroke(rect.expand(1.0), radius, Stroke::new(2.0_f32, focus_color(pal)), StrokeKind::Outside);
+    ui.painter().rect_stroke(
+        rect.expand(1.0),
+        radius,
+        Stroke::new(2.0_f32, focus_color(pal)),
+        StrokeKind::Outside,
+    );
 }
 
 /// [`focus_ring`] for round controls.
 pub fn focus_circle(ui: &Ui, pal: &Palette, center: egui::Pos2, radius: f32) {
-    ui.painter().circle_stroke(center, radius + 2.0, Stroke::new(2.0_f32, focus_color(pal)));
+    ui.painter()
+        .circle_stroke(center, radius + 2.0, Stroke::new(2.0_f32, focus_color(pal)));
 }
 
 /// Tells screen readers what a custom-painted control is.
@@ -452,21 +535,39 @@ pub fn describe(response: &Response, label: &str, enabled: bool) {
 }
 
 /// Flat toolbar button: icon with an optional label; shaded on hover.
-pub fn tool_button(ui: &mut Ui, pal: &Palette, icon: Icon, label: Option<&str>, enabled: bool, tip: &str) -> Response {
+pub fn tool_button(
+    ui: &mut Ui,
+    pal: &Palette,
+    icon: Icon,
+    label: Option<&str>,
+    enabled: bool,
+    tip: &str,
+) -> Response {
     let font = FontId::new(13.0, FontFamily::Proportional);
     let tint = if enabled { pal.text } else { pal.text3 };
     let galley = label.map(|l| ui.painter().layout_no_wrap(l.to_owned(), font, tint));
     let width = 30.0 + galley.as_ref().map_or(0.0, |g| g.size().x + 6.0);
-    let sense = if enabled { Sense::click() } else { Sense::hover() };
+    let sense = if enabled {
+        Sense::click()
+    } else {
+        Sense::hover()
+    };
     let (rect, response) = ui.allocate_exact_size(vec2(width, 28.0), sense);
     if enabled && (response.hovered() || response.is_pointer_button_down_on()) {
-        let fill = if response.is_pointer_button_down_on() { pal.control_active } else { pal.control_hover.gamma_multiply(0.7) };
+        let fill = if response.is_pointer_button_down_on() {
+            pal.control_active
+        } else {
+            pal.control_hover.gamma_multiply(0.7)
+        };
         ui.painter().rect_filled(rect, CornerRadius::same(7), fill);
     }
     if response.has_focus() {
         focus_ring(ui, pal, rect, CornerRadius::same(7));
     }
-    let icon_rect = egui::Rect::from_center_size(egui::pos2(rect.left() + 15.0, rect.center().y), vec2(16.0, 16.0));
+    let icon_rect = egui::Rect::from_center_size(
+        egui::pos2(rect.left() + 15.0, rect.center().y),
+        vec2(16.0, 16.0),
+    );
     icons::paint(ui.painter(), icon_rect, icon, tint);
     if let Some(galley) = galley {
         let pos = egui::pos2(rect.left() + 30.0, rect.center().y - galley.size().y / 2.0);
@@ -494,16 +595,37 @@ pub enum PillSize {
 }
 
 /// Rounded pill button. Disabled buttons stay visible but muted.
-pub fn pill_button(ui: &mut Ui, pal: &Palette, text: &str, kind: ButtonKind, enabled: bool) -> Response {
+pub fn pill_button(
+    ui: &mut Ui,
+    pal: &Palette,
+    text: &str,
+    kind: ButtonKind,
+    enabled: bool,
+) -> Response {
     pill(ui, pal, text, kind, enabled, PillSize::Regular, 0.0)
 }
 
 /// [`pill_button`] at least `min_width` wide (for side-by-side decisions).
-pub fn pill_button_sized(ui: &mut Ui, pal: &Palette, text: &str, kind: ButtonKind, enabled: bool, min_width: f32) -> Response {
+pub fn pill_button_sized(
+    ui: &mut Ui,
+    pal: &Palette,
+    text: &str,
+    kind: ButtonKind,
+    enabled: bool,
+    min_width: f32,
+) -> Response {
     pill(ui, pal, text, kind, enabled, PillSize::Regular, min_width)
 }
 
-pub fn pill(ui: &mut Ui, pal: &Palette, text: &str, kind: ButtonKind, enabled: bool, size: PillSize, min_width: f32) -> Response {
+pub fn pill(
+    ui: &mut Ui,
+    pal: &Palette,
+    text: &str,
+    kind: ButtonKind,
+    enabled: bool,
+    size: PillSize,
+    min_width: f32,
+) -> Response {
     let (fill, fg) = match (kind, enabled) {
         (ButtonKind::Primary, true) => (pal.accent_fill, pal.on_accent),
         (ButtonKind::Inverse, true) => (pal.selected_bg, pal.selected_fg),
@@ -515,9 +637,17 @@ pub fn pill(ui: &mut Ui, pal: &Palette, text: &str, kind: ButtonKind, enabled: b
         PillSize::Regular => (32.0, 13.5, 28.0),
         PillSize::Small => (26.0, 12.5, 22.0),
     };
-    let galley = ui.painter().layout_no_wrap(text.to_owned(), FontId::new(font_size, semibold_family()), fg);
+    let galley = ui.painter().layout_no_wrap(
+        text.to_owned(),
+        FontId::new(font_size, semibold_family()),
+        fg,
+    );
     let size = vec2((galley.size().x + pad).max(min_width), height);
-    let sense = if enabled { Sense::click() } else { Sense::hover() };
+    let sense = if enabled {
+        Sense::click()
+    } else {
+        Sense::hover()
+    };
     let (rect, response) = ui.allocate_exact_size(size, sense);
     let fill = if !enabled {
         fill
@@ -536,14 +666,35 @@ pub fn pill(ui: &mut Ui, pal: &Palette, text: &str, kind: ButtonKind, enabled: b
     if response.has_focus() {
         focus_ring(ui, pal, rect, radius);
     }
-    ui.painter().galley(egui::pos2(rect.center().x - galley.size().x / 2.0, rect.center().y - galley.size().y / 2.0), galley, fg);
+    ui.painter().galley(
+        egui::pos2(
+            rect.center().x - galley.size().x / 2.0,
+            rect.center().y - galley.size().y / 2.0,
+        ),
+        galley,
+        fg,
+    );
     describe(&response, text, enabled);
     response
 }
 
 /// Round icon button used for Send, Call and similar single actions.
-pub fn round_button(ui: &mut Ui, pal: &Palette, diameter: f32, fill: Color32, fg: Color32, icon: Icon, enabled: bool, label: &str) -> Response {
-    let sense = if enabled { Sense::click() } else { Sense::hover() };
+#[allow(clippy::too_many_arguments)] // a paint helper: each argument is one visual property
+pub fn round_button(
+    ui: &mut Ui,
+    pal: &Palette,
+    diameter: f32,
+    fill: Color32,
+    fg: Color32,
+    icon: Icon,
+    enabled: bool,
+    label: &str,
+) -> Response {
+    let sense = if enabled {
+        Sense::click()
+    } else {
+        Sense::hover()
+    };
     let (rect, response) = ui.allocate_exact_size(vec2(diameter, diameter), sense);
     let fill = if !enabled {
         pal.control
@@ -554,12 +705,14 @@ pub fn round_button(ui: &mut Ui, pal: &Palette, diameter: f32, fill: Color32, fg
     } else {
         fill
     };
-    ui.painter().circle_filled(rect.center(), diameter / 2.0, fill);
+    ui.painter()
+        .circle_filled(rect.center(), diameter / 2.0, fill);
     if response.has_focus() {
         focus_circle(ui, pal, rect.center(), diameter / 2.0);
     }
     let tint = if enabled { fg } else { pal.text3 };
-    let icon_rect = egui::Rect::from_center_size(rect.center(), vec2(diameter * 0.46, diameter * 0.46));
+    let icon_rect =
+        egui::Rect::from_center_size(rect.center(), vec2(diameter * 0.46, diameter * 0.46));
     if icon == Icon::Phone {
         icons::paint_handset(ui.painter(), rect.center(), diameter * 0.34, tint, 0.0);
     } else if icon == Icon::HangUp {
@@ -588,16 +741,32 @@ pub fn icon_button(ui: &mut Ui, pal: &Palette, icon: Icon, label: &str) -> Respo
     if icon == Icon::Phone {
         icons::paint_handset(ui.painter(), rect.center(), 8.0, pal.text, 0.0);
     } else {
-        icons::paint(ui.painter(), egui::Rect::from_center_size(rect.center(), vec2(15.0, 15.0)), icon, pal.text);
+        icons::paint(
+            ui.painter(),
+            egui::Rect::from_center_size(rect.center(), vec2(15.0, 15.0)),
+            icon,
+            pal.text,
+        );
     }
     describe(&response, label, true);
     response.on_hover_text(label)
 }
 
 /// macOS-style segmented control. Returns true when the selection changed.
-pub fn segmented<T: PartialEq + Copy>(ui: &mut Ui, pal: &Palette, value: &mut T, options: &[(T, &str)]) -> bool {
+pub fn segmented<T: PartialEq + Copy>(
+    ui: &mut Ui,
+    pal: &Palette,
+    value: &mut T,
+    options: &[(T, &str)],
+) -> bool {
     let font = FontId::new(13.0, FontFamily::Proportional);
-    let galleys: Vec<_> = options.iter().map(|(_, label)| ui.painter().layout_no_wrap((*label).to_owned(), font.clone(), pal.text)).collect();
+    let galleys: Vec<_> = options
+        .iter()
+        .map(|(_, label)| {
+            ui.painter()
+                .layout_no_wrap((*label).to_owned(), font.clone(), pal.text)
+        })
+        .collect();
     let seg_w = galleys.iter().map(|g| g.size().x).fold(0.0_f32, f32::max) + 26.0;
     let total = vec2(seg_w * options.len() as f32 + 4.0, 30.0);
     let (rect, _) = ui.allocate_exact_size(total, Sense::hover());
@@ -605,23 +774,48 @@ pub fn segmented<T: PartialEq + Copy>(ui: &mut Ui, pal: &Palette, value: &mut T,
     ui.painter().rect_filled(rect, track, pal.control);
     let mut changed = false;
     for (i, ((option, label), galley)) in options.iter().zip(galleys).enumerate() {
-        let seg = egui::Rect::from_min_size(egui::pos2(rect.left() + 2.0 + seg_w * i as f32, rect.top() + 2.0), vec2(seg_w, 26.0));
+        let seg = egui::Rect::from_min_size(
+            egui::pos2(rect.left() + 2.0 + seg_w * i as f32, rect.top() + 2.0),
+            vec2(seg_w, 26.0),
+        );
         let id = ui.id().with(("segment", i));
         let response = ui.interact(seg, id, Sense::click());
         let selected = *value == *option;
         if selected {
-            let fill = if pal.dark { pal.control_active } else { Color32::WHITE };
+            let fill = if pal.dark {
+                pal.control_active
+            } else {
+                Color32::WHITE
+            };
             ui.painter().rect_filled(seg, CornerRadius::same(13), fill);
-            ui.painter().rect_stroke(seg, CornerRadius::same(13), Stroke::new(1.0_f32, pal.separator), StrokeKind::Inside);
+            ui.painter().rect_stroke(
+                seg,
+                CornerRadius::same(13),
+                Stroke::new(1.0_f32, pal.separator),
+                StrokeKind::Inside,
+            );
         } else if response.hovered() {
-            ui.painter().rect_filled(seg, CornerRadius::same(13), pal.control_hover.gamma_multiply(0.6));
+            ui.painter().rect_filled(
+                seg,
+                CornerRadius::same(13),
+                pal.control_hover.gamma_multiply(0.6),
+            );
         }
         if response.has_focus() {
             focus_ring(ui, pal, seg, CornerRadius::same(13));
         }
         let color = if selected { pal.text } else { pal.text2 };
-        ui.painter().galley(egui::pos2(seg.center().x - galley.size().x / 2.0, seg.center().y - galley.size().y / 2.0), galley, color);
-        response.widget_info(|| WidgetInfo::selected(WidgetType::SelectableLabel, true, selected, *label));
+        ui.painter().galley(
+            egui::pos2(
+                seg.center().x - galley.size().x / 2.0,
+                seg.center().y - galley.size().y / 2.0,
+            ),
+            galley,
+            color,
+        );
+        response.widget_info(|| {
+            WidgetInfo::selected(WidgetType::SelectableLabel, true, selected, *label)
+        });
         if response.clicked() && !selected {
             *value = *option;
             changed = true;
@@ -631,28 +825,61 @@ pub fn segmented<T: PartialEq + Copy>(ui: &mut Ui, pal: &Palette, value: &mut T,
 }
 
 /// A selectable sidebar row. `badge` is a short right-aligned count.
-pub fn sidebar_item(ui: &mut Ui, pal: &Palette, icon: Icon, label: &str, badge: Option<&str>, selected: bool) -> Response {
+pub fn sidebar_item(
+    ui: &mut Ui,
+    pal: &Palette,
+    icon: Icon,
+    label: &str,
+    badge: Option<&str>,
+    selected: bool,
+) -> Response {
     let (rect, response) = ui.allocate_exact_size(vec2(ui.available_width(), 32.0), Sense::click());
     let radius = CornerRadius::same(R_ROW);
     if selected {
         ui.painter().rect_filled(rect, radius, pal.selected_bg);
     } else if response.hovered() {
-        ui.painter().rect_filled(rect, radius, pal.control_hover.gamma_multiply(0.55));
+        ui.painter()
+            .rect_filled(rect, radius, pal.control_hover.gamma_multiply(0.55));
     }
     if response.has_focus() {
         focus_ring(ui, pal, rect, radius);
     }
     let fg = if selected { pal.selected_fg } else { pal.text };
     let icon_tint = if selected { pal.selected_fg } else { pal.text2 };
-    icons::paint(ui.painter(), egui::Rect::from_center_size(egui::pos2(rect.left() + 18.0, rect.center().y), vec2(16.0, 16.0)), icon, icon_tint);
-    let galley = ui.painter().layout_no_wrap(label.to_owned(), FontId::new(13.5, FontFamily::Proportional), fg);
-    ui.painter().galley(egui::pos2(rect.left() + 36.0, rect.center().y - galley.size().y / 2.0), galley, fg);
+    icons::paint(
+        ui.painter(),
+        egui::Rect::from_center_size(
+            egui::pos2(rect.left() + 18.0, rect.center().y),
+            vec2(16.0, 16.0),
+        ),
+        icon,
+        icon_tint,
+    );
+    let galley = ui.painter().layout_no_wrap(
+        label.to_owned(),
+        FontId::new(13.5, FontFamily::Proportional),
+        fg,
+    );
+    ui.painter().galley(
+        egui::pos2(rect.left() + 36.0, rect.center().y - galley.size().y / 2.0),
+        galley,
+        fg,
+    );
     if let Some(badge) = badge {
-        let g = ui.painter().layout_no_wrap(badge.to_owned(), FontId::new(12.0, semibold_family()), pal.on_accent);
+        let g = ui.painter().layout_no_wrap(
+            badge.to_owned(),
+            FontId::new(12.0, semibold_family()),
+            pal.on_accent,
+        );
         let w = (g.size().x + 12.0).max(20.0);
-        let pill = egui::Rect::from_center_size(egui::pos2(rect.right() - 10.0 - w / 2.0, rect.center().y), vec2(w, 18.0));
-        ui.painter().rect_filled(pill, CornerRadius::same(9), pal.accent_fill);
-        ui.painter().galley(pill.center() - g.size() / 2.0, g, pal.on_accent);
+        let pill = egui::Rect::from_center_size(
+            egui::pos2(rect.right() - 10.0 - w / 2.0, rect.center().y),
+            vec2(w, 18.0),
+        );
+        ui.painter()
+            .rect_filled(pill, CornerRadius::same(9), pal.accent_fill);
+        ui.painter()
+            .galley(pill.center() - g.size() / 2.0, g, pal.on_accent);
     }
     describe(&response, label, true);
     response
@@ -662,7 +889,11 @@ pub fn sidebar_item(ui: &mut Ui, pal: &Palette, icon: Icon, label: &str, badge: 
 pub fn card<R>(ui: &mut Ui, pal: &Palette, add: impl FnOnce(&mut Ui) -> R) -> R {
     Frame::new()
         .fill(pal.tile)
-        .stroke(if pal.dark { Stroke::NONE } else { Stroke::new(1.0_f32, pal.separator) })
+        .stroke(if pal.dark {
+            Stroke::NONE
+        } else {
+            Stroke::new(1.0_f32, pal.separator)
+        })
         .corner_radius(CornerRadius::same(R_CARD))
         .inner_margin(Margin::same(S4 as i8))
         .show(ui, |ui| {
@@ -703,8 +934,19 @@ mod tests {
     fn text_and_red_accent_meet_4_5_to_1_on_every_surface_in_both_themes() {
         for dark in [false, true] {
             let p = base_palette(dark);
-            for (bg_name, bg) in [("content", p.content), ("sidebar", p.sidebar), ("tile", p.tile), ("control", p.control), ("control_hover", p.control_hover)] {
-                for (fg_name, fg) in [("text", p.text), ("text2", p.text2), ("text3", p.text3), ("accent", p.accent)] {
+            for (bg_name, bg) in [
+                ("content", p.content),
+                ("sidebar", p.sidebar),
+                ("tile", p.tile),
+                ("control", p.control),
+                ("control_hover", p.control_hover),
+            ] {
+                for (fg_name, fg) in [
+                    ("text", p.text),
+                    ("text2", p.text2),
+                    ("text3", p.text3),
+                    ("accent", p.accent),
+                ] {
                     let r = ratio(fg, bg);
                     assert!(r >= 4.5, "dark={dark} {fg_name} on {bg_name}: {r:.2}");
                 }
@@ -723,7 +965,9 @@ mod tests {
     fn focus_ring_is_visible_and_never_the_brand_red() {
         for dark in [false, true] {
             let p = base_palette(dark);
-            for bg in [p.toolbar, p.sidebar, p.content, p.surface, p.tile, p.control] {
+            for bg in [
+                p.toolbar, p.sidebar, p.content, p.surface, p.tile, p.control,
+            ] {
                 assert!(ratio(focus_color(&p), bg) >= 3.0);
             }
             assert_ne!(focus_color(&p), p.accent_fill);
@@ -749,7 +993,10 @@ mod tests {
             ctx.fonts(|f| {
                 for family in [FontFamily::Proportional, FontFamily::Monospace] {
                     for c in ['a', 'É', 'ž', 'Ж', 'ω', '€', '—'] {
-                        assert!(f.has_glyph(&FontId::new(14.0, family.clone()), c), "{c} in {family:?}");
+                        assert!(
+                            f.has_glyph(&FontId::new(14.0, family.clone()), c),
+                            "{c} in {family:?}"
+                        );
                     }
                 }
             });

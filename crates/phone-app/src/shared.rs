@@ -75,8 +75,19 @@ impl Shared {
             Event::RecentsChanged => {
                 self.recents.fetch_add(1, Ordering::Release);
             }
-            Event::TextResult { token, number, result } => {
-                push_capped(&mut self.queues().outcomes, TextOutcome { token: *token, number: number.clone(), result: result.clone() });
+            Event::TextResult {
+                token,
+                number,
+                result,
+            } => {
+                push_capped(
+                    &mut self.queues().outcomes,
+                    TextOutcome {
+                        token: *token,
+                        number: number.clone(),
+                        result: result.clone(),
+                    },
+                );
             }
             Event::Notice(text) => {
                 let mut q = self.queues();
@@ -128,7 +139,14 @@ mod tests {
     use phone_core::conversations::Message;
 
     fn text() -> Message {
-        Message { number: "+1".into(), incoming: true, text: "hi".into(), at: 1, read: false, pending: false }
+        Message {
+            number: "+1".into(),
+            incoming: true,
+            text: "hi".into(),
+            at: 1,
+            read: false,
+            pending: false,
+        }
     }
 
     #[test]
@@ -143,7 +161,14 @@ mod tests {
         assert_eq!(s.generations().conversations, before.conversations + 1);
         s.apply(&Event::Phone(None));
         let g = s.generations();
-        assert_eq!((g.contacts, g.conversations, g.recents), (before.contacts + 1, before.conversations + 2, before.recents + 2));
+        assert_eq!(
+            (g.contacts, g.conversations, g.recents),
+            (
+                before.contacts + 1,
+                before.conversations + 2,
+                before.recents + 2
+            )
+        );
     }
 
     #[test]
@@ -153,7 +178,10 @@ mod tests {
             s.apply(&Event::Notice("No phone is connected.".into()));
         }
         s.apply(&Event::Notice("Other".into()));
-        assert_eq!(s.take_notices(), vec!["No phone is connected.".to_string(), "Other".to_string()]);
+        assert_eq!(
+            s.take_notices(),
+            vec!["No phone is connected.".to_string(), "Other".to_string()]
+        );
         assert!(s.take_notices().is_empty());
     }
 
@@ -161,7 +189,11 @@ mod tests {
     fn queues_are_bounded() {
         let s = Shared::default();
         for i in 0..(MAX_QUEUED as u64 + 20) {
-            s.apply(&Event::TextResult { token: i, number: "1".into(), result: Ok(()) });
+            s.apply(&Event::TextResult {
+                token: i,
+                number: "1".into(),
+                result: Ok(()),
+            });
         }
         let out = s.take_outcomes();
         assert_eq!(out.len(), MAX_QUEUED);
@@ -171,7 +203,11 @@ mod tests {
     #[test]
     fn outcomes_keep_their_failure_text() {
         let s = Shared::default();
-        s.apply(&Event::TextResult { token: 7, number: "+1".into(), result: Err("no link".into()) });
+        s.apply(&Event::TextResult {
+            token: 7,
+            number: "+1".into(),
+            result: Err("no link".into()),
+        });
         let out = s.take_outcomes();
         assert_eq!(out[0].result, Err("no link".to_string()));
         assert_eq!(out[0].token, 7);

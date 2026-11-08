@@ -27,6 +27,8 @@ pub enum Scene {
     Text,
     /// The phone has not allowed access to messages and contacts.
     Denied,
+    /// The phone is paired but not connected.
+    Offline,
 }
 
 impl Scene {
@@ -38,6 +40,7 @@ impl Scene {
             "dialing" => Scene::Dialing,
             "text" => Scene::Text,
             "denied" => Scene::Denied,
+            "offline" => Scene::Offline,
             _ => return None,
         })
     }
@@ -66,11 +69,13 @@ impl DemoControl {
     pub fn miss(&self, number: &str) {
         let control = self.clone();
         let number = number.to_string();
-        let spawned = std::thread::Builder::new().name("gbp-demo-miss".into()).spawn(move || {
-            control.ring(&number);
-            std::thread::sleep(Duration::from_millis(3000));
-            control.end_call();
-        });
+        let spawned = std::thread::Builder::new()
+            .name("gbp-demo-miss".into())
+            .spawn(move || {
+                control.ring(&number);
+                std::thread::sleep(Duration::from_millis(3000));
+                control.end_call();
+            });
         if let Err(e) = spawned {
             log::warn!("cannot simulate a missed call: {e}");
         }
@@ -79,23 +84,25 @@ impl DemoControl {
     /// Fills Recents: a missed call, a short answered one and one placed from here.
     pub fn seed_history(&self, handle: Handle) {
         let control = self.clone();
-        let spawned = std::thread::Builder::new().name("gbp-demo-history".into()).spawn(move || {
-            let pause = |ms| std::thread::sleep(Duration::from_millis(ms));
-            pause(800);
-            control.ring(KNOWN_NUMBER);
-            pause(1500);
-            control.end_call();
-            pause(3200);
-            control.ring(UNKNOWN_NUMBER);
-            pause(1200);
-            handle.answer("/demo/call1");
-            pause(2500);
-            control.end_call();
-            pause(3200);
-            handle.dial("+33612345678");
-            pause(1200);
-            control.end_call();
-        });
+        let spawned = std::thread::Builder::new()
+            .name("gbp-demo-history".into())
+            .spawn(move || {
+                let pause = |ms| std::thread::sleep(Duration::from_millis(ms));
+                pause(800);
+                control.ring(KNOWN_NUMBER);
+                pause(1500);
+                control.end_call();
+                pause(3200);
+                control.ring(UNKNOWN_NUMBER);
+                pause(1200);
+                handle.answer("/demo/call1");
+                pause(2500);
+                control.end_call();
+                pause(3200);
+                handle.dial("+33612345678");
+                pause(1200);
+                control.end_call();
+            });
         if let Err(e) = spawned {
             log::warn!("cannot seed the demo history: {e}");
         }
@@ -105,8 +112,22 @@ impl DemoControl {
         self.platform.hang_up_now();
     }
 
+    /// Connects or disconnects the fake phone.
+    pub fn set_connected(&self, connected: bool) {
+        if let Ok(mut c) = self.platform.connected.lock() {
+            *c = connected;
+        }
+    }
+
+    pub fn is_connected(&self) -> bool {
+        self.platform.connected.lock().map(|c| *c).unwrap_or(false)
+    }
+
     /// Sets the fake phone up for `scene` before the service first talks to it.
     pub fn prepare(&self, scene: Scene) {
+        if scene == Scene::Offline {
+            self.set_connected(false);
+        }
         if scene == Scene::Denied {
             if let Ok(mut state) = self.platform.server.state.lock() {
                 // OBEX "forbidden": the phone's allow prompt was refused.
@@ -118,22 +139,26 @@ impl DemoControl {
     /// Plays a scene on a helper thread so the UI never waits for it.
     pub fn play(&self, scene: Scene, handle: Handle) {
         let control = self.clone();
-        let spawned = std::thread::Builder::new().name("gbp-demo-scene".into()).spawn(move || {
-            // Let the service find the phone and load the data first.
-            std::thread::sleep(Duration::from_millis(2500));
-            match scene {
-                Scene::Ring => control.ring(KNOWN_NUMBER),
-                Scene::RingUnknown => control.ring(UNKNOWN_NUMBER),
-                Scene::Dialing => handle.dial("+33612345678"),
-                Scene::Active => {
-                    control.ring(KNOWN_NUMBER);
-                    std::thread::sleep(Duration::from_millis(1500));
-                    handle.answer("/demo/call1");
+        let spawned = std::thread::Builder::new()
+            .name("gbp-demo-scene".into())
+            .spawn(move || {
+                // Let the service find the phone and load the data first.
+                std::thread::sleep(Duration::from_millis(2500));
+                match scene {
+                    Scene::Ring => control.ring(KNOWN_NUMBER),
+                    Scene::RingUnknown => control.ring(UNKNOWN_NUMBER),
+                    Scene::Dialing => handle.dial("+33612345678"),
+                    Scene::Active => {
+                        control.ring(KNOWN_NUMBER);
+                        std::thread::sleep(Duration::from_millis(1500));
+                        handle.answer("/demo/call1");
+                    }
+                    Scene::Text => {
+                        control.text(KNOWN_NUMBER, "Table is ready, come whenever you like")
+                    }
+                    Scene::Denied | Scene::Offline => {}
                 }
-                Scene::Text => control.text(KNOWN_NUMBER, "Table is ready, come whenever you like"),
-                Scene::Denied => {}
-            }
-        });
+            });
         if let Err(e) = spawned {
             log::warn!("cannot start the demo scene: {e}");
         }
@@ -147,7 +172,8 @@ pub struct DemoDir {
 
 impl DemoDir {
     pub fn create() -> std::io::Result<Self> {
-        let path = std::env::temp_dir().join(format!("geekbridge-phone-demo-{}", std::process::id()));
+        let path =
+            std::env::temp_dir().join(format!("geekbridge-phone-demo-{}", std::process::id()));
         std::fs::create_dir_all(&path)?;
         Ok(Self { path })
     }

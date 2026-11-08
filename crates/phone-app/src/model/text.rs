@@ -26,8 +26,14 @@ mod tests {
 
     #[test]
     fn plain_text_is_borrowed_unchanged() {
-        assert!(matches!(display_text("Merci pour hier, c'était génial !"), Cow::Borrowed(_)));
-        assert_eq!(display_text("line one\nline two\tend"), "line one\nline two\tend");
+        assert!(matches!(
+            display_text("Merci pour hier, c'était génial !"),
+            Cow::Borrowed(_)
+        ));
+        assert_eq!(
+            display_text("line one\nline two\tend"),
+            "line one\nline two\tend"
+        );
     }
 
     #[test]
