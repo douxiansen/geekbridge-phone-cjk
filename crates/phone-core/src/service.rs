@@ -938,15 +938,23 @@ fn pull_contacts(inner: &Inner, address: &str) -> Result<(), String> {
     }
     let _ = pbap.close();
 
-    if let Err(e) = inner
-        .db
-        .replace_contacts(address, book.contacts(), unix_now())
-    {
-        log::warn!("cannot save contacts: {e}");
+    // An empty phonebook is not an answer to keep: a phone that has not been allowed to share
+    // its contacts (an iPhone without "Sync Contacts") returns an empty list. Keep what was
+    // cached, do not stamp it as fetched, and say why.
+    let empty = book.is_empty();
+    if !empty {
+        if let Err(e) = inner
+            .db
+            .replace_contacts(address, book.contacts(), unix_now())
+        {
+            log::warn!("cannot save contacts: {e}");
+        }
     }
     let added: Vec<Recent> = {
         let mut st = lock(&inner.state);
-        st.contacts = book;
+        if !empty {
+            st.contacts = book;
+        }
         history
             .into_iter()
             .filter(|h| st.recents.add(h.clone()))
@@ -954,6 +962,9 @@ fn pull_contacts(inner: &Inner, address: &str) -> Result<(), String> {
     };
     if let Err(e) = inner.db.upsert_recents(address, &added) {
         log::warn!("cannot save call history: {e}");
+    }
+    if empty {
+        return Err("The phone shared no contacts. On an iPhone, turn on Sync Contacts for this computer in its Bluetooth settings.".to_string());
     }
     Ok(())
 }
@@ -979,7 +990,8 @@ fn contacts_loop(inner: Arc<Inner>, rx: Receiver<()>) {
             .contacts_fetched_at(&phone.address)
             .ok()
             .flatten()
-            .is_some_and(|t| unix_now() - t < CONTACTS_MAX_AGE_SECS);
+            .is_some_and(|t| unix_now() - t < CONTACTS_MAX_AGE_SECS)
+            && !lock(&inner.state).contacts.is_empty();
         let due = loaded_for.as_deref() != Some(phone.address.as_str())
             && settings.load_contacts_on_connect
             && !fresh;

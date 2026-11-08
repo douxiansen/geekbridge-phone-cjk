@@ -513,3 +513,23 @@ fn the_phones_media_audio_is_kept_off_while_idle_but_not_during_a_call_or_when_s
     assert_eq!(count(&p), off);
     svc.stop();
 }
+
+#[test]
+fn a_phone_that_shares_no_contacts_is_reported_and_retried_not_remembered_as_fresh() {
+    let p = FakePlatform::new();
+    // An iPhone that has not been allowed to share contacts answers with an empty phonebook.
+    p.server.state.lock().unwrap().contacts_vcf = String::new();
+    let (svc, rx) = Service::start(p.clone(), fast("nocontacts"));
+    let h = svc.handle();
+    wait_for(&rx, |e| {
+        matches!(e, Event::Notice(n) if n.contains("shared no contacts")).then_some(())
+    });
+    assert!(matches!(h.state().contacts_status, LinkStatus::Failed(_)));
+    assert!(h.state().contacts.is_empty());
+
+    // The user turns sharing on and presses Reload: contacts load, no 12-hour wait.
+    p.server.state.lock().unwrap().contacts_vcf = VCF.into();
+    h.send(phone_core::service::Command::ReloadContacts);
+    eventually(|| h.state().contacts_status == LinkStatus::Ready && h.state().contacts.len() == 1);
+    svc.stop();
+}

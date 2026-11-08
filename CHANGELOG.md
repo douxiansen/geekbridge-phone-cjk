@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.3
+
+- iPhone: a phone that has not been allowed to share contacts used to leave the app believing it had fresh (empty) contacts for 12 hours. An empty phonebook is now reported ("turn on Sync Contacts on the iPhone"), retried, and never replaces cached contacts.
+- Examples to inspect a phone's OBEX and phonebook replies (`obex_raw`, `pbap_probe`).
+
 ## 0.1.2
 
 iPhone support groundwork: a phone that refuses a connection (an iPhone before message access is allowed) is now reported as "allow access on your phone" instead of a garbled-data error.
