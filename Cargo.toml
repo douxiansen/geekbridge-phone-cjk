@@ -3,7 +3,7 @@ resolver = "2"
 members = ["crates/phone-obex", "crates/phone-linux", "crates/phone-core", "crates/phone-overlay", "crates/phone-update", "crates/phone-app"]
 
 [workspace.package]
-version = "0.1.3"
+version = "0.1.4"
 edition = "2021"
 license = "GPL-3.0-or-later"
 rust-version = "1.88"

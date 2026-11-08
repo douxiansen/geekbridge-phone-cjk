@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.4
+
+iPhone setup guide: when an iPhone is connected and not fully set up, a pop-up walks through the four steps (pair, Show Notifications, Sync Contacts, first call), shows your computer's real Bluetooth name, and ticks each step off by itself as it starts working. Reopen it any time from Settings or the Help menu.
+
 ## 0.1.3
 
 - iPhone: a phone that has not been allowed to share contacts used to leave the app believing it had fresh (empty) contacts for 12 hours. An empty phonebook is now reported ("turn on Sync Contacts on the iPhone"), retried, and never replaces cached contacts.
