@@ -1,0 +1,38 @@
+[package]
+name = "phone-app"
+description = "GeekBridge Phone desktop app: Bluetooth phone dialler and SMS (egui)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[lib]
+name = "phone_app"
+path = "src/lib.rs"
+
+[[bin]]
+name = "geekbridge-phone"
+path = "src/main.rs"
+
+[dependencies]
+phone-core = { path = "../phone-core" }
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+eframe = { version = "0.31.1", default-features = false, features = ["glow", "wayland", "x11"] }
+log = "0.4"
+env_logger = { version = "0.11", default-features = false, features = ["auto-color", "humantime"] }
+serde = { version = "1", features = ["derive"] }
+
+[dev-dependencies]
+tempfile = "3"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+phone-linux = { path = "../phone-linux" }
+zbus = { version = "5", default-features = false, features = ["blocking-api", "async-io"] }
+
+[features]
+default = ["accesskit", "demo"]
+# Screen-reader support through egui's AccessKit integration (AT-SPI, UIA, NSAccessibility).
+accesskit = ["eframe/accesskit"]
+# `--demo`: a fake phone with invented data, for screenshots and UI work.
+demo = ["phone-core/demo"]
