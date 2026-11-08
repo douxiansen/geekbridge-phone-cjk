@@ -1,0 +1,28 @@
+[package]
+name = "phone-overlay"
+description = "macOS-style notification banners for calls and texts: platform-neutral core plus a Wayland layer-shell presenter"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[features]
+default = ["wayland"]
+# Linux presenter: a zwlr_layer_shell_v1 client. Ignored on other targets.
+wayland = [
+    "dep:smithay-client-toolkit",
+    "dep:zbus",
+]
+
+[dependencies]
+cosmic-text = { version = "0.14", default-features = false, features = ["std", "swash"] }
+thiserror = "2"
+tiny-skia = { version = "0.11", default-features = false, features = ["std", "simd"] }
+unicode-segmentation = "1"
+
+[dev-dependencies]
+tiny-skia = { version = "0.11", features = ["png-format"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+smithay-client-toolkit = { version = "0.19", optional = true }
+zbus = { version = "5", optional = true }
