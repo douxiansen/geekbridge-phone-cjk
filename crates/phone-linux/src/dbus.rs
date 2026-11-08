@@ -28,12 +28,20 @@ fn get_str(p: &Props, k: &str) -> Option<String> {
 }
 
 fn get_bool(p: &Props, k: &str) -> bool {
-    p.get(k).and_then(|v| bool::try_from(v.clone()).ok()).unwrap_or(false)
+    p.get(k)
+        .and_then(|v| bool::try_from(v.clone()).ok())
+        .unwrap_or(false)
 }
 
 fn managed(conn: &Connection, service: &str, root: &str) -> Result<Managed> {
     let reply = conn
-        .call_method(Some(service), root, Some("org.freedesktop.DBus.ObjectManager"), "GetManagedObjects", &())
+        .call_method(
+            Some(service),
+            root,
+            Some("org.freedesktop.DBus.ObjectManager"),
+            "GetManagedObjects",
+            &(),
+        )
         .map_err(other)?;
     reply.body().deserialize::<Managed>().map_err(other)
 }
@@ -43,28 +51,42 @@ pub fn phones(system: &Connection) -> Result<Vec<PhoneInfo>> {
     let objects = managed(system, BLUEZ, "/")?;
     let mut out = Vec::new();
     for ifaces in objects.values() {
-        let Some(dev) = ifaces.get("org.bluez.Device1") else { continue };
+        let Some(dev) = ifaces.get("org.bluez.Device1") else {
+            continue;
+        };
         if !get_bool(dev, "Paired") {
             continue;
         }
-        let uuids: Vec<String> = dev.get("UUIDs").and_then(|v| Vec::<String>::try_from(v.clone()).ok()).unwrap_or_default();
-        let is_phone = get_str(dev, "Icon").as_deref() == Some("phone") || uuids.iter().any(|u| u.eq_ignore_ascii_case(HFP_AG_UUID));
+        let uuids: Vec<String> = dev
+            .get("UUIDs")
+            .and_then(|v| Vec::<String>::try_from(v.clone()).ok())
+            .unwrap_or_default();
+        let is_phone = get_str(dev, "Icon").as_deref() == Some("phone")
+            || uuids.iter().any(|u| u.eq_ignore_ascii_case(HFP_AG_UUID));
         if !is_phone {
             continue;
         }
-        let Some(address) = get_str(dev, "Address") else { continue };
+        let Some(address) = get_str(dev, "Address") else {
+            continue;
+        };
         let battery = ifaces
             .get("org.bluez.Battery1")
             .and_then(|b| b.get("Percentage"))
             .and_then(|v| u8::try_from(v.clone()).ok());
         out.push(PhoneInfo {
-            name: get_str(dev, "Alias").or_else(|| get_str(dev, "Name")).unwrap_or_else(|| address.clone()),
+            name: get_str(dev, "Alias")
+                .or_else(|| get_str(dev, "Name"))
+                .unwrap_or_else(|| address.clone()),
             address,
             connected: get_bool(dev, "Connected"),
             battery,
         });
     }
-    out.sort_by(|a, b| b.connected.cmp(&a.connected).then_with(|| a.name.cmp(&b.name)));
+    out.sort_by(|a, b| {
+        b.connected
+            .cmp(&a.connected)
+            .then_with(|| a.name.cmp(&b.name))
+    });
     Ok(out)
 }
 
@@ -78,20 +100,33 @@ pub fn gateway_path(session: &Connection, address: &str) -> Result<String> {
             }
         }
     }
-    Err(other("the phone is not connected for calls (no hands-free link)"))
+    Err(other(
+        "the phone is not connected for calls (no hands-free link)",
+    ))
 }
 
 /// The calls the phone has now.
 pub fn calls(session: &Connection, address: &str) -> Result<Vec<CallSnapshot>> {
     let path = gateway_path(session, address)?;
-    let reply = session.call_method(Some(TELEPHONY), path.as_str(), Some(CALL_MGR_IFACE), "GetCalls", &()).map_err(other)?;
+    let reply = session
+        .call_method(
+            Some(TELEPHONY),
+            path.as_str(),
+            Some(CALL_MGR_IFACE),
+            "GetCalls",
+            &(),
+        )
+        .map_err(other)?;
     let calls: HashMap<OwnedObjectPath, Props> = reply.body().deserialize().map_err(other)?;
     let mut out: Vec<CallSnapshot> = calls
         .into_iter()
         .map(|(id, p)| CallSnapshot {
             id: id.to_string(),
             state: CallState::parse(&get_str(&p, "State").unwrap_or_default()),
-            number: get_str(&p, "LineIdentification").filter(|n| !n.is_empty()).or_else(|| get_str(&p, "IncomingLine")).unwrap_or_default(),
+            number: get_str(&p, "LineIdentification")
+                .filter(|n| !n.is_empty())
+                .or_else(|| get_str(&p, "IncomingLine"))
+                .unwrap_or_default(),
             name: get_str(&p, "Name").filter(|n| !n.is_empty()),
         })
         .collect();
@@ -101,20 +136,50 @@ pub fn calls(session: &Connection, address: &str) -> Result<Vec<CallSnapshot>> {
 
 pub fn dial(session: &Connection, address: &str, number: &str) -> Result<()> {
     let path = gateway_path(session, address)?;
-    session.call_method(Some(TELEPHONY), path.as_str(), Some(AG_IFACE), "Dial", &(number,)).map(|_| ()).map_err(other)
+    session
+        .call_method(
+            Some(TELEPHONY),
+            path.as_str(),
+            Some(AG_IFACE),
+            "Dial",
+            &(number,),
+        )
+        .map(|_| ())
+        .map_err(other)
 }
 
 pub fn call_method(session: &Connection, call_path: &str, method: &str) -> Result<()> {
     // Hangup/Answer on the ofono-compatible interface is the one that works.
-    session.call_method(Some(TELEPHONY), call_path, Some(CALL_IFACE), method, &()).map(|_| ()).map_err(other)
+    session
+        .call_method(Some(TELEPHONY), call_path, Some(CALL_IFACE), method, &())
+        .map(|_| ())
+        .map_err(other)
 }
 
 pub fn hang_up_all(session: &Connection, address: &str) -> Result<()> {
     let path = gateway_path(session, address)?;
-    session.call_method(Some(TELEPHONY), path.as_str(), Some(AG_IFACE), "HangupAll", &()).map(|_| ()).map_err(other)
+    session
+        .call_method(
+            Some(TELEPHONY),
+            path.as_str(),
+            Some(AG_IFACE),
+            "HangupAll",
+            &(),
+        )
+        .map(|_| ())
+        .map_err(other)
 }
 
 pub fn send_tones(session: &Connection, address: &str, tones: &str) -> Result<()> {
     let path = gateway_path(session, address)?;
-    session.call_method(Some(TELEPHONY), path.as_str(), Some(AG_IFACE), "SendTones", &(tones,)).map(|_| ()).map_err(other)
+    session
+        .call_method(
+            Some(TELEPHONY),
+            path.as_str(),
+            Some(AG_IFACE),
+            "SendTones",
+            &(tones,),
+        )
+        .map(|_| ())
+        .map_err(other)
 }

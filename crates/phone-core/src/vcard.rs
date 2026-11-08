@@ -24,7 +24,11 @@ fn unfold(text: &str) -> Vec<String> {
 }
 
 fn unescape(value: &str) -> String {
-    value.replace("\\n", " ").replace("\\,", ",").replace("\\;", ";").replace("\\\\", "\\")
+    value
+        .replace("\\n", " ")
+        .replace("\\,", ",")
+        .replace("\\;", ";")
+        .replace("\\\\", "\\")
 }
 
 /// Builds a display name from an `N:` value (family;given;additional;prefix;suffix).
@@ -32,7 +36,7 @@ fn name_from_n(value: &str) -> String {
     let p: Vec<&str> = value.split(';').collect();
     let given = p.get(1).copied().unwrap_or("").trim();
     let family = p.first().copied().unwrap_or("").trim();
-    unescape(&format!("{given} {family}").trim().to_string())
+    unescape(format!("{given} {family}").trim())
 }
 
 pub fn parse(text: &str) -> Vec<Card> {
@@ -40,7 +44,9 @@ pub fn parse(text: &str) -> Vec<Card> {
     let mut current: Option<Card> = None;
     let mut n_name = String::new();
     for line in unfold(text) {
-        let Some((key, value)) = line.split_once(':') else { continue };
+        let Some((key, value)) = line.split_once(':') else {
+            continue;
+        };
         let property = key.split(';').next().unwrap_or("").to_ascii_uppercase();
         match property.as_str() {
             "BEGIN" if value.eq_ignore_ascii_case("VCARD") => {

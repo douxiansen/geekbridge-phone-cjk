@@ -21,7 +21,11 @@ pub fn parse_text(bmessage: &[u8]) -> Option<String> {
     let s = String::from_utf8_lossy(bmessage);
     let start = s.find("BEGIN:MSG")? + "BEGIN:MSG".len();
     let end = s[start..].rfind("END:MSG")? + start;
-    Some(s[start..end].trim_matches(|c| c == '\r' || c == '\n').to_string())
+    Some(
+        s[start..end]
+            .trim_matches(|c| c == '\r' || c == '\n')
+            .to_string(),
+    )
 }
 
 /// Keeps digits and a leading plus; `None` when nothing dialable remains.
@@ -43,7 +47,15 @@ mod tests {
     fn length_counts_the_msg_block() {
         let b = build_sms("+4912345", "héllo\nworld");
         let s = String::from_utf8(b.clone()).unwrap();
-        let declared: usize = s.split("LENGTH:").nth(1).unwrap().split("\r\n").next().unwrap().parse().unwrap();
+        let declared: usize = s
+            .split("LENGTH:")
+            .nth(1)
+            .unwrap()
+            .split("\r\n")
+            .next()
+            .unwrap()
+            .parse()
+            .unwrap();
         let start = s.find("BEGIN:MSG").unwrap();
         let end = s.find("END:MSG\r\n").unwrap() + "END:MSG\r\n".len();
         assert_eq!(declared, end - start);
@@ -53,7 +65,10 @@ mod tests {
 
     #[test]
     fn numbers_are_cleaned() {
-        assert_eq!(clean_number(" +213 (550) 00-00-01 ").as_deref(), Some("+213550000001"));
+        assert_eq!(
+            clean_number(" +213 (550) 00-00-01 ").as_deref(),
+            Some("+213550000001")
+        );
         assert_eq!(clean_number("12+34").as_deref(), Some("1234"));
         assert_eq!(clean_number("+"), None);
         assert_eq!(clean_number("abc"), None);

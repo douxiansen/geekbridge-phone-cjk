@@ -42,7 +42,13 @@ impl FakePhoneServer {
     }
 
     pub fn connection(&self) -> FakeConnection {
-        FakeConnection { state: self.state.clone(), out: VecDeque::new(), folder: vec![], connected: false, put_buf: Vec::new() }
+        FakeConnection {
+            state: self.state.clone(),
+            out: VecDeque::new(),
+            folder: vec![],
+            connected: false,
+            put_buf: Vec::new(),
+        }
     }
 }
 
@@ -55,10 +61,13 @@ pub struct FakeConnection {
 }
 
 fn xml_escape(s: &str) -> String {
-    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
 }
 
-fn find<'a>(headers: &'a [Header], f: impl Fn(&Header) -> bool) -> Option<&'a Header> {
+fn find(headers: &[Header], f: impl Fn(&Header) -> bool) -> Option<&Header> {
     headers.iter().find(|h| f(h))
 }
 
@@ -70,7 +79,11 @@ impl FakeConnection {
 
     fn listing(&self, folder: &str) -> String {
         let st = self.state.lock().unwrap();
-        let (msgs, sent_folder) = if folder == "sent" { (&st.sent, true) } else { (&st.inbox, false) };
+        let (msgs, sent_folder) = if folder == "sent" {
+            (&st.sent, true)
+        } else {
+            (&st.inbox, false)
+        };
         let mut xml = String::from("<?xml version=\"1.0\"?>\n<MAP-msg-listing version=\"1.0\">\n");
         for (i, m) in msgs.iter().enumerate() {
             xml.push_str(&format!(
@@ -95,7 +108,11 @@ impl FakeConnection {
                 }
                 self.state.lock().unwrap().sessions_opened += 1;
                 self.connected = true;
-                self.reply(RSP_SUCCESS, &[0x10, 0x00, 0x20, 0x00], &[Header::ConnectionId(1)]);
+                self.reply(
+                    RSP_SUCCESS,
+                    &[0x10, 0x00, 0x20, 0x00],
+                    &[Header::ConnectionId(1)],
+                );
             }
             OP_DISCONNECT => {
                 self.connected = false;
@@ -106,7 +123,9 @@ impl FakeConnection {
                 let headers = decode_headers(body.get(2..).unwrap_or(&[])).unwrap_or_default();
                 if flags & 1 == 1 {
                     self.folder.pop();
-                } else if let Some(Header::Name(n)) = find(&headers, |h| matches!(h, Header::Name(_))) {
+                } else if let Some(Header::Name(n)) =
+                    find(&headers, |h| matches!(h, Header::Name(_)))
+                {
                     if n.is_empty() {
                         self.folder.clear();
                     } else {
@@ -151,11 +170,21 @@ impl FakeConnection {
                 let mut whole = std::mem::take(&mut self.put_buf);
                 whole.extend(chunk.unwrap_or_default());
                 let text = String::from_utf8_lossy(&whole).to_string();
-                let tel = text.lines().find_map(|l| l.trim().strip_prefix("TEL:")).unwrap_or("").to_string();
+                let tel = text
+                    .lines()
+                    .find_map(|l| l.trim().strip_prefix("TEL:"))
+                    .unwrap_or("")
+                    .to_string();
                 let msg = crate::bmessage::parse_text(&whole).unwrap_or_default();
                 let mut st = self.state.lock().unwrap();
                 let now = st.clock.clone();
-                st.sent.push(FakeMessage { from: String::new(), to: tel, text: msg, datetime: now, read: true });
+                st.sent.push(FakeMessage {
+                    from: String::new(),
+                    to: tel,
+                    text: msg,
+                    datetime: now,
+                    read: true,
+                });
                 drop(st);
                 self.reply(RSP_SUCCESS, &[], &[]);
             }

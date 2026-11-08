@@ -10,7 +10,10 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 fn main() {
-    let secs: u64 = std::env::args().nth(1).and_then(|s| s.parse().ok()).unwrap_or(25);
+    let secs: u64 = std::env::args()
+        .nth(1)
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(25);
     let platform = Arc::new(phone_linux::LinuxPlatform::new().expect("buses"));
     let root = std::env::temp_dir().join("gbp-live");
     let _ = std::fs::remove_dir_all(&root);
@@ -20,9 +23,15 @@ fn main() {
     while Instant::now() < end {
         if let Ok(e) = rx.recv_timeout(Duration::from_millis(500)) {
             match e {
-                Event::Phone(p) => println!("phone: {:?}", p.map(|p| (p.name, p.connected, p.battery))),
+                Event::Phone(p) => {
+                    println!("phone: {:?}", p.map(|p| (p.name, p.connected, p.battery)))
+                }
                 Event::Call(c) => println!("call event: {c:?}"),
-                Event::TextReceived(m) => println!("TEXT RECEIVED from {} ({} chars)", m.number, m.text.chars().count()),
+                Event::TextReceived(m) => println!(
+                    "TEXT RECEIVED from {} ({} chars)",
+                    m.number,
+                    m.text.chars().count()
+                ),
                 Event::Notice(n) => println!("notice: {n}"),
                 Event::ContactsChanged => {
                     let st = h.state();
@@ -30,7 +39,12 @@ fn main() {
                 }
                 Event::ConversationsChanged => {
                     let st = h.state();
-                    println!("conversations: {} threads, {} unread ({:?})", st.conversations.conversations().len(), st.conversations.unread_total(), st.messages_status);
+                    println!(
+                        "conversations: {} threads, {} unread ({:?})",
+                        st.conversations.conversations().len(),
+                        st.conversations.unread_total(),
+                        st.messages_status
+                    );
                 }
                 Event::RecentsChanged => println!("recents: {}", h.state().recents.len()),
                 _ => {}
@@ -39,7 +53,13 @@ fn main() {
     }
     {
         let st = h.state();
-        println!("final: messages {:?}, contacts {:?} ({} contacts), recents {}", st.messages_status, st.contacts_status, st.contacts.len(), st.recents.len());
+        println!(
+            "final: messages {:?}, contacts {:?} ({} contacts), recents {}",
+            st.messages_status,
+            st.contacts_status,
+            st.contacts.len(),
+            st.recents.len()
+        );
     }
     svc.stop();
 }

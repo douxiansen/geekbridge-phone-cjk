@@ -6,7 +6,7 @@
 //! phone's single message session: poll, send, reconnect), contacts (phonebook
 //! and call history), and a command dispatcher.
 
-use crate::calls::{CallEvent, CallSnapshot, CallTracker, CallState};
+use crate::calls::{CallEvent, CallSnapshot, CallState, CallTracker};
 use crate::contacts::{Contact, ContactBook};
 use crate::conversations::{parse_map_time, Conversations, InboxWatcher, Message};
 use crate::platform::{PhoneInfo, Platform};
@@ -79,7 +79,11 @@ pub enum Event {
     /// A text arrived on the phone.
     TextReceived(Message),
     /// The outcome of [`Handle::send_text`].
-    TextResult { token: u64, number: String, result: Result<(), String> },
+    TextResult {
+        token: u64,
+        number: String,
+        result: Result<(), String>,
+    },
     /// Something the user should know, in a sentence.
     Notice(String),
 }
@@ -91,7 +95,11 @@ pub enum Command {
     HangUp(String),
     HangUpAll,
     Tones(String),
-    SendText { token: u64, number: String, text: String },
+    SendText {
+        token: u64,
+        number: String,
+        text: String,
+    },
     ReloadContacts,
     /// Use this paired phone from now on.
     SelectPhone(String),
@@ -135,7 +143,10 @@ impl Gate {
     /// Sleeps up to `d`; returns true if the service stopped.
     fn sleep(&self, d: Duration) -> bool {
         let guard = lock(&self.stopped);
-        let (guard, _) = self.cv.wait_timeout_while(guard, d, |s| !*s).unwrap_or_else(|e| e.into_inner());
+        let (guard, _) = self
+            .cv
+            .wait_timeout_while(guard, d, |s| !*s)
+            .unwrap_or_else(|e| e.into_inner());
         *guard
     }
     fn is_stopped(&self) -> bool {
@@ -174,7 +185,11 @@ impl Inner {
         self.emit(Event::Notice(msg));
     }
     fn phone_dir(&self, address: &str) -> PathBuf {
-        self.opts.paths.data.join("phones").join(address.replace(':', "_"))
+        self.opts
+            .paths
+            .data
+            .join("phones")
+            .join(address.replace(':', "_"))
     }
     fn settings_path(&self) -> PathBuf {
         self.opts.paths.config.join("settings.json")
@@ -219,7 +234,11 @@ impl Handle {
             *t += 1;
             *t
         };
-        self.send(Command::SendText { token, number: number.to_string(), text: text.to_string() });
+        self.send(Command::SendText {
+            token,
+            number: number.to_string(),
+            text: text.to_string(),
+        });
         token
     }
     pub fn set_settings(&self, s: Settings) {
@@ -234,20 +253,29 @@ pub struct Service {
 }
 
 fn unix_now() -> i64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_secs() as i64)
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs() as i64)
 }
 
 impl Service {
     pub fn start(platform: Arc<dyn Platform>, opts: Options) -> (Self, Receiver<Event>) {
         let (events_tx, events_rx) = mpsc::channel();
         let (cmd_tx, cmd_rx) = mpsc::channel();
-        let settings: Settings = store::load::<Settings>(&opts.paths.config.join("settings.json")).sanitised();
+        let settings: Settings =
+            store::load::<Settings>(&opts.paths.config.join("settings.json")).sanitised();
         let inner = Arc::new(Inner {
             platform,
             opts,
-            state: Mutex::new(State { settings, ..State::default() }),
+            state: Mutex::new(State {
+                settings,
+                ..State::default()
+            }),
             events: events_tx,
-            gate: Gate { stopped: Mutex::new(false), cv: Condvar::new() },
+            gate: Gate {
+                stopped: Mutex::new(false),
+                cv: Condvar::new(),
+            },
             cmd: cmd_tx,
             next_token: Mutex::new(0),
         });
@@ -255,7 +283,12 @@ impl Service {
         let (contacts_tx, contacts_rx) = mpsc::channel::<()>();
 
         let mut threads = Vec::new();
-        let spawn = |name: &str, f: Box<dyn FnOnce() + Send>| thread::Builder::new().name(name.into()).spawn(f).expect("spawn thread");
+        let spawn = |name: &str, f: Box<dyn FnOnce() + Send>| {
+            thread::Builder::new()
+                .name(name.into())
+                .spawn(f)
+                .expect("spawn thread")
+        };
         {
             let i = inner.clone();
             threads.push(spawn("gbp-phones", Box::new(move || phones_loop(i))));
@@ -266,17 +299,32 @@ impl Service {
         }
         {
             let i = inner.clone();
-            threads.push(spawn("gbp-messages", Box::new(move || messages_loop(i, msg_rx))));
+            threads.push(spawn(
+                "gbp-messages",
+                Box::new(move || messages_loop(i, msg_rx)),
+            ));
         }
         {
             let i = inner.clone();
-            threads.push(spawn("gbp-contacts", Box::new(move || contacts_loop(i, contacts_rx))));
+            threads.push(spawn(
+                "gbp-contacts",
+                Box::new(move || contacts_loop(i, contacts_rx)),
+            ));
         }
         {
             let i = inner.clone();
-            threads.push(spawn("gbp-commands", Box::new(move || command_loop(i, cmd_rx, msg_tx, contacts_tx))));
+            threads.push(spawn(
+                "gbp-commands",
+                Box::new(move || command_loop(i, cmd_rx, msg_tx, contacts_tx)),
+            ));
         }
-        (Self { handle: Handle { inner }, threads }, events_rx)
+        (
+            Self {
+                handle: Handle { inner },
+                threads,
+            },
+            events_rx,
+        )
     }
 
     pub fn handle(&self) -> Handle {
@@ -330,7 +378,11 @@ fn phones_loop(inner: Arc<Inner>) {
                     .or_else(|| list.first().cloned());
                 let (changed, address_changed) = {
                     let st = lock(&inner.state);
-                    (st.phone != chosen || st.phones != list, st.phone.as_ref().map(|p| &p.address) != chosen.as_ref().map(|p| &p.address))
+                    (
+                        st.phone != chosen || st.phones != list,
+                        st.phone.as_ref().map(|p| &p.address)
+                            != chosen.as_ref().map(|p| &p.address),
+                    )
                 };
                 if address_changed {
                     if let Some(p) = &chosen {
@@ -380,16 +432,35 @@ fn calls_loop(inner: Arc<Inner>) {
                     let events = tracker.ingest(&snaps, now_ms);
                     let mut since: HashMap<String, u64> = HashMap::new();
                     for e in &events {
-                        if let CallEvent::Changed { id, since_ms: Some(ms), .. } = e {
+                        if let CallEvent::Changed {
+                            id,
+                            since_ms: Some(ms),
+                            ..
+                        } = e
+                        {
                             since.insert(id.clone(), *ms);
                         }
                     }
                     let next = build_calls(&inner, &snaps, &shown, &since, started);
                     for e in events {
-                        if let CallEvent::Ended { number, direction, seconds, .. } = &e {
+                        if let CallEvent::Ended {
+                            number,
+                            direction,
+                            seconds,
+                            ..
+                        } = &e
+                        {
                             let mut st = lock(&inner.state);
-                            st.recents.add(Recent { number: number.clone(), kind: Kind::from(direction), at: unix_now(), seconds: *seconds });
-                            let _ = store::save(&inner.phone_dir(&phone.address).join("recents.json"), &st.recents);
+                            st.recents.add(Recent {
+                                number: number.clone(),
+                                kind: Kind::from(direction),
+                                at: unix_now(),
+                                seconds: *seconds,
+                            });
+                            let _ = store::save(
+                                &inner.phone_dir(&phone.address).join("recents.json"),
+                                &st.recents,
+                            );
                             drop(st);
                             inner.emit(Event::RecentsChanged);
                         }
@@ -421,18 +492,29 @@ fn calls_loop(inner: Arc<Inner>) {
     }
 }
 
-fn build_calls(inner: &Inner, snaps: &[CallSnapshot], previous: &[ActiveCall], since: &HashMap<String, u64>, started: Instant) -> Vec<ActiveCall> {
+fn build_calls(
+    inner: &Inner,
+    snaps: &[CallSnapshot],
+    previous: &[ActiveCall],
+    since: &HashMap<String, u64>,
+    started: Instant,
+) -> Vec<ActiveCall> {
     let st = lock(&inner.state);
     snaps
         .iter()
         .map(|s| {
             let kept = previous.iter().find(|p| p.id == s.id).and_then(|p| p.since);
-            let from_event = since.get(&s.id).map(|ms| started + Duration::from_millis(*ms));
+            let from_event = since
+                .get(&s.id)
+                .map(|ms| started + Duration::from_millis(*ms));
             ActiveCall {
                 id: s.id.clone(),
                 state: s.state,
                 number: s.number.clone(),
-                name: s.name.clone().or_else(|| st.contacts.name_for(&s.number).map(str::to_string)),
+                name: s
+                    .name
+                    .clone()
+                    .or_else(|| st.contacts.name_for(&s.number).map(str::to_string)),
                 since: kept.or(from_event),
             }
         })
@@ -481,7 +563,11 @@ fn messages_loop(inner: Arc<Inner>, rx: Receiver<(u64, String, String)>) {
             set_status(LinkStatus::Idle);
             // Answer sends with a clear failure while there is no phone.
             while let Ok((token, number, _)) = rx.try_recv() {
-                inner.emit(Event::TextResult { token, number, result: Err("No phone is connected.".into()) });
+                inner.emit(Event::TextResult {
+                    token,
+                    number,
+                    result: Err("No phone is connected.".into()),
+                });
             }
             if inner.gate.sleep(Duration::from_millis(500)) {
                 return;
@@ -497,18 +583,38 @@ fn messages_loop(inner: Arc<Inner>, rx: Receiver<(u64, String, String)>) {
                 continue;
             }
             set_status(LinkStatus::Connecting);
-            let opened = inner.platform.open_map(&phone.address).map_err(|e| e.to_string()).and_then(|s| {
-                MapClient::connect(s).map_err(|e| if e.is_access_denied() { "denied".to_string() } else { e.to_string() })
-            });
+            let opened = inner
+                .platform
+                .open_map(&phone.address)
+                .map_err(|e| e.to_string())
+                .and_then(|s| {
+                    MapClient::connect(s).map_err(|e| {
+                        if e.is_access_denied() {
+                            "denied".to_string()
+                        } else {
+                            e.to_string()
+                        }
+                    })
+                });
             match opened {
                 Ok(map) => {
-                    link = Some(Link { address: phone.address.clone(), map });
+                    link = Some(Link {
+                        address: phone.address.clone(),
+                        map,
+                    });
                     set_status(LinkStatus::Ready);
                     backoff = inner.opts.reconnect_min;
                     told_denied = false;
                     next_poll = Instant::now();
-                    if watcher.as_ref().map(|(a, _)| a != &phone.address).unwrap_or(true) {
-                        watcher = Some((phone.address.clone(), InboxWatcher::new(&lock(&inner.state).conversations)));
+                    if watcher
+                        .as_ref()
+                        .map(|(a, _)| a != &phone.address)
+                        .unwrap_or(true)
+                    {
+                        watcher = Some((
+                            phone.address.clone(),
+                            InboxWatcher::new(&lock(&inner.state).conversations),
+                        ));
                     }
                 }
                 Err(e) => {
@@ -531,7 +637,9 @@ fn messages_loop(inner: Arc<Inner>, rx: Receiver<(u64, String, String)>) {
         }
 
         // Wait for a send request or the next poll, whichever comes first.
-        let wait = next_poll.saturating_duration_since(Instant::now()).min(Duration::from_millis(500));
+        let wait = next_poll
+            .saturating_duration_since(Instant::now())
+            .min(Duration::from_millis(500));
         match rx.recv_timeout(wait) {
             Ok((token, number, text)) => {
                 let result = match link.as_mut() {
@@ -551,7 +659,11 @@ fn messages_loop(inner: Arc<Inner>, rx: Receiver<(u64, String, String)>) {
                     // Look soon, to swap the pending copy for the phone's.
                     next_poll = Instant::now() + Duration::from_millis(1500);
                 }
-                inner.emit(Event::TextResult { token, number, result });
+                inner.emit(Event::TextResult {
+                    token,
+                    number,
+                    result,
+                });
             }
             Err(RecvTimeoutError::Timeout) => {}
             Err(RecvTimeoutError::Disconnected) => return,
@@ -565,11 +677,17 @@ fn messages_loop(inner: Arc<Inner>, rx: Receiver<(u64, String, String)>) {
                 Ok((inbox, sent)) => {
                     let (changed, fresh) = {
                         let mut st = lock(&inner.state);
-                        let fresh = watcher.as_mut().map(|(_, w)| w.take_new(&inbox)).unwrap_or_default();
+                        let fresh = watcher
+                            .as_mut()
+                            .map(|(_, w)| w.take_new(&inbox))
+                            .unwrap_or_default();
                         let mut changed = st.conversations.ingest(&inbox, &sent);
                         changed |= st.conversations.expire_pending(unix_now());
                         if changed {
-                            let _ = store::save(&inner.phone_dir(&phone.address).join("conversations.json"), &st.conversations);
+                            let _ = store::save(
+                                &inner.phone_dir(&phone.address).join("conversations.json"),
+                                &st.conversations,
+                            );
                         }
                         (changed, fresh)
                     };
@@ -593,7 +711,9 @@ fn messages_loop(inner: Arc<Inner>, rx: Receiver<(u64, String, String)>) {
     }
 }
 
-fn poll_once(map: &mut MapSession) -> Result<(Vec<phone_obex::MessageEntry>, Vec<phone_obex::MessageEntry>), phone_obex::ObexError> {
+fn poll_once(
+    map: &mut MapSession,
+) -> Result<(Vec<phone_obex::MessageEntry>, Vec<phone_obex::MessageEntry>), phone_obex::ObexError> {
     map.set_folder("/telecom/msg/inbox")?;
     let inbox = map.list_messages(100, 255)?;
     map.set_folder("/telecom/msg/sent")?;
@@ -604,17 +724,38 @@ fn poll_once(map: &mut MapSession) -> Result<(Vec<phone_obex::MessageEntry>, Vec
 // --- contacts -------------------------------------------------------------
 
 fn pull_contacts(inner: &Inner, address: &str) -> Result<(), String> {
-    let stream = inner.platform.open_pbap(address).map_err(|e| e.to_string())?;
-    let mut pbap = PbapClient::connect(stream).map_err(|e| if e.is_access_denied() { "Allow contacts access for this computer on your phone.".to_string() } else { e.to_string() })?;
+    let stream = inner
+        .platform
+        .open_pbap(address)
+        .map_err(|e| e.to_string())?;
+    let mut pbap = PbapClient::connect(stream).map_err(|e| {
+        if e.is_access_denied() {
+            "Allow contacts access for this computer on your phone.".to_string()
+        } else {
+            e.to_string()
+        }
+    })?;
     let contacts_text = pbap.pull(Book::Contacts, 5000).map_err(|e| e.to_string())?;
     let book = ContactBook::from_cards(vcard::parse(&contacts_text));
     let mut history = Vec::new();
-    for (b, kind) in [(Book::Received, Kind::Incoming), (Book::Dialed, Kind::Outgoing), (Book::Missed, Kind::Missed)] {
+    for (b, kind) in [
+        (Book::Received, Kind::Incoming),
+        (Book::Dialed, Kind::Outgoing),
+        (Book::Missed, Kind::Missed),
+    ] {
         // History is a nicety: a phone that refuses it still gives contacts.
         if let Ok(text) = pbap.pull(b, 200) {
             for card in vcard::parse(&text) {
-                if let (Some(n), Some(t)) = (card.numbers.first(), card.call_time.as_deref().and_then(parse_map_time)) {
-                    history.push(Recent { number: n.clone(), kind, at: t, seconds: 0 });
+                if let (Some(n), Some(t)) = (
+                    card.numbers.first(),
+                    card.call_time.as_deref().and_then(parse_map_time),
+                ) {
+                    history.push(Recent {
+                        number: n.clone(),
+                        kind,
+                        at: t,
+                        seconds: 0,
+                    });
                 }
             }
         }
@@ -646,7 +787,8 @@ fn contacts_loop(inner: Arc<Inner>, rx: Receiver<()>) {
             continue;
         };
         let settings = inner.settings();
-        let due = loaded_for.as_deref() != Some(phone.address.as_str()) && settings.load_contacts_on_connect;
+        let due = loaded_for.as_deref() != Some(phone.address.as_str())
+            && settings.load_contacts_on_connect;
         let retry_wait = Duration::from_secs(10 * 2u64.pow(failures.min(5)));
         if !(requested || (due && last_try.elapsed() >= retry_wait)) {
             continue;
@@ -675,20 +817,58 @@ fn contacts_loop(inner: Arc<Inner>, rx: Receiver<()>) {
 
 // --- commands -------------------------------------------------------------
 
-fn command_loop(inner: Arc<Inner>, rx: Receiver<Command>, msg_tx: Sender<(u64, String, String)>, contacts_tx: Sender<()>) {
+fn command_loop(
+    inner: Arc<Inner>,
+    rx: Receiver<Command>,
+    msg_tx: Sender<(u64, String, String)>,
+    contacts_tx: Sender<()>,
+) {
     while let Ok(cmd) = rx.recv() {
         if inner.gate.is_stopped() {
             return;
         }
         let phone = inner.selected_connected();
-        let need_phone = || -> Result<PhoneInfo, String> { phone.clone().ok_or_else(|| "No phone is connected.".to_string()) };
+        let need_phone = || -> Result<PhoneInfo, String> {
+            phone
+                .clone()
+                .ok_or_else(|| "No phone is connected.".to_string())
+        };
         let result: Result<(), String> = match cmd {
-            Command::Dial(n) => need_phone().and_then(|p| inner.platform.dial(&p.address, &n).map_err(|e| e.to_string())),
-            Command::Answer(id) => need_phone().and_then(|p| inner.platform.answer(&p.address, &id).map_err(|e| e.to_string())),
-            Command::HangUp(id) => need_phone().and_then(|p| inner.platform.hang_up(&p.address, &id).map_err(|e| e.to_string())),
-            Command::HangUpAll => need_phone().and_then(|p| inner.platform.hang_up_all(&p.address).map_err(|e| e.to_string())),
-            Command::Tones(t) => need_phone().and_then(|p| inner.platform.send_tones(&p.address, &t).map_err(|e| e.to_string())),
-            Command::SendText { token, number, text } => {
+            Command::Dial(n) => need_phone().and_then(|p| {
+                inner
+                    .platform
+                    .dial(&p.address, &n)
+                    .map_err(|e| e.to_string())
+            }),
+            Command::Answer(id) => need_phone().and_then(|p| {
+                inner
+                    .platform
+                    .answer(&p.address, &id)
+                    .map_err(|e| e.to_string())
+            }),
+            Command::HangUp(id) => need_phone().and_then(|p| {
+                inner
+                    .platform
+                    .hang_up(&p.address, &id)
+                    .map_err(|e| e.to_string())
+            }),
+            Command::HangUpAll => need_phone().and_then(|p| {
+                inner
+                    .platform
+                    .hang_up_all(&p.address)
+                    .map_err(|e| e.to_string())
+            }),
+            Command::Tones(t) => need_phone().and_then(|p| {
+                inner
+                    .platform
+                    .send_tones(&p.address, &t)
+                    .map_err(|e| e.to_string())
+            }),
+            Command::SendText {
+                token,
+                number,
+                text,
+            } => {
                 let _ = msg_tx.send((token, number, text));
                 Ok(())
             }

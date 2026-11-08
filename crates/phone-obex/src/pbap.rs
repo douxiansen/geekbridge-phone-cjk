@@ -60,7 +60,9 @@ impl<S: Read + Write> PbapClient<S> {
         param(&mut params, TAG_FORMAT, &[FORMAT_VCARD_30]);
         param(&mut params, TAG_MAX_LIST_COUNT, &max.to_be_bytes());
         param(&mut params, TAG_START_OFFSET, &0u16.to_be_bytes());
-        let data = self.obex.get(TYPE_PHONEBOOK, Some(book.object()), Some(params))?;
+        let data = self
+            .obex
+            .get(TYPE_PHONEBOOK, Some(book.object()), Some(params))?;
         Ok(String::from_utf8_lossy(&data).into_owned())
     }
 
@@ -83,7 +85,10 @@ mod tests {
         c.extend_from_slice(&((ok_connect.len() + 3) as u16).to_be_bytes());
         c.append(&mut ok_connect);
         let vcf = b"BEGIN:VCARD\r\nFN:Ali\r\nTEL:+1\r\nEND:VCARD\r\n".to_vec();
-        let phone = FakePhone::new(vec![c, encode_request(RSP_SUCCESS, &[], &[Header::EndOfBody(vcf)])]);
+        let phone = FakePhone::new(vec![
+            c,
+            encode_request(RSP_SUCCESS, &[], &[Header::EndOfBody(vcf)]),
+        ]);
         let mut pbap = PbapClient::connect(phone).unwrap();
         let text = pbap.pull(Book::Contacts, 500).unwrap();
         assert!(text.contains("FN:Ali"));

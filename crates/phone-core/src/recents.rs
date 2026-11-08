@@ -49,13 +49,15 @@ impl Recents {
         // The same call can arrive from the live tracker and from the phone's
         // history: treat the same number, kind and minute as one call.
         let dup = self.entries.iter().any(|e| {
-            number_key(&e.number) == number_key(&entry.number) && e.kind == entry.kind && (e.at - entry.at).abs() < 90
+            number_key(&e.number) == number_key(&entry.number)
+                && e.kind == entry.kind
+                && (e.at - entry.at).abs() < 90
         });
         if dup {
             return;
         }
         self.entries.push(entry);
-        self.entries.sort_by(|a, b| b.at.cmp(&a.at));
+        self.entries.sort_by_key(|e| std::cmp::Reverse(e.at));
         self.entries.truncate(MAX_ENTRIES);
     }
 
@@ -73,7 +75,12 @@ mod tests {
     use super::*;
 
     fn r(n: &str, kind: Kind, at: i64) -> Recent {
-        Recent { number: n.into(), kind, at, seconds: 0 }
+        Recent {
+            number: n.into(),
+            kind,
+            at,
+            seconds: 0,
+        }
     }
 
     #[test]

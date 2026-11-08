@@ -79,7 +79,12 @@ mod tests {
 
     #[test]
     fn silly_values_are_clamped() {
-        let s = Settings { inbox_poll_secs: 0, text_banner_secs: 9999, ..Settings::default() }.sanitised();
+        let s = Settings {
+            inbox_poll_secs: 0,
+            text_banner_secs: 9999,
+            ..Settings::default()
+        }
+        .sanitised();
         assert_eq!(s.inbox_poll_secs, 2);
         assert_eq!(s.text_banner_secs, 60);
     }

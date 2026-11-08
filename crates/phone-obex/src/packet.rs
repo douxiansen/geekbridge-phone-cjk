@@ -134,7 +134,9 @@ pub fn decode_headers(mut data: &[u8]) -> Result<Vec<Header>, ObexError> {
             HDR_BODY => Header::Body(value.to_vec()),
             HDR_END_OF_BODY => Header::EndOfBody(value.to_vec()),
             HDR_APP_PARAMS => Header::AppParams(value.to_vec()),
-            HDR_CONNECTION_ID => Header::ConnectionId(u32::from_be_bytes(value.try_into().unwrap())),
+            HDR_CONNECTION_ID => {
+                Header::ConnectionId(u32::from_be_bytes(value.try_into().unwrap()))
+            }
             HDR_LENGTH => Header::Length(u32::from_be_bytes(value.try_into().unwrap())),
             _ => Header::Other(id, value.to_vec()),
         };
@@ -145,9 +147,10 @@ pub fn decode_headers(mut data: &[u8]) -> Result<Vec<Header>, ObexError> {
 }
 
 fn decode_unicode(value: &[u8]) -> String {
-    let units: Vec<u16> = value
-        .chunks_exact(2)
-        .map(|c| u16::from_be_bytes([c[0], c[1]]))
+    let (pairs, _) = value.as_chunks::<2>();
+    let units: Vec<u16> = pairs
+        .iter()
+        .map(|c| u16::from_be_bytes(*c))
         .take_while(|u| *u != 0)
         .collect();
     String::from_utf16_lossy(&units)
@@ -189,7 +192,11 @@ pub fn decode_response(packet: &[u8], fixed_len: usize) -> Result<Response, Obex
     }
     let body = &packet[3..];
     // Only a successful Connect carries the fixed fields.
-    let take = if packet[0] == RSP_SUCCESS { fixed_len.min(body.len()) } else { 0 };
+    let take = if packet[0] == RSP_SUCCESS {
+        fixed_len.min(body.len())
+    } else {
+        0
+    };
     Ok(Response {
         code: packet[0],
         fixed: body[..take].to_vec(),
