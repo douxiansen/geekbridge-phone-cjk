@@ -191,12 +191,10 @@ pub fn decode_response(packet: &[u8], fixed_len: usize) -> Result<Response, Obex
         return Err(ObexError::Malformed("response length mismatch"));
     }
     let body = &packet[3..];
-    // Only a successful Connect carries the fixed fields.
-    let take = if packet[0] == RSP_SUCCESS {
-        fixed_len.min(body.len())
-    } else {
-        0
-    };
+    // A Connect response carries its fixed fields (version, flags, maximum packet size) whatever
+    // the result: a phone that refuses still sends them, and reading them as headers would
+    // turn a plain "forbidden" into a "malformed data" error.
+    let take = fixed_len.min(body.len());
     Ok(Response {
         code: packet[0],
         fixed: body[..take].to_vec(),
@@ -242,6 +240,16 @@ mod tests {
     fn request_length_counts_whole_packet() {
         let p = encode_request(OP_GET_FINAL, &[], &[Header::Type("t".into())]);
         assert_eq!(u16::from_be_bytes([p[1], p[2]]) as usize, p.len());
+    }
+
+    /// What an iPhone really answers when message access is not allowed yet.
+    #[test]
+    fn a_refused_connect_still_has_its_fixed_fields() {
+        let reply = [0xC3, 0x00, 0x07, 0x10, 0x00, 0x0F, 0xA0];
+        let r = decode_response(&reply, 4).unwrap();
+        assert_eq!(r.code, 0xC3);
+        assert_eq!(r.fixed, vec![0x10, 0x00, 0x0F, 0xA0]);
+        assert!(r.headers.is_empty());
     }
 
     #[test]

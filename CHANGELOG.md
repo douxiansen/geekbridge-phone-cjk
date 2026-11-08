@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.2
+
+iPhone support groundwork: a phone that refuses a connection (an iPhone before message access is allowed) is now reported as "allow access on your phone" instead of a garbled-data error.
+
 ## 0.1.1
 
 Calls only: the phone's music and videos no longer play through your computer's speakers. Settings > Calls > Calls only (on by default) keeps the Bluetooth audio link for calls.

@@ -314,6 +314,16 @@ mod tests {
     }
 
     #[test]
+    fn a_phone_that_refuses_the_connection_is_reported_as_access_denied() {
+        // Exactly the bytes an iPhone sends before message access is allowed.
+        let phone = FakePhone::new(vec![vec![0xC3, 0x00, 0x07, 0x10, 0x00, 0x0F, 0xA0]]);
+        let mut c = ObexClient::new(phone);
+        let e = c.connect(&TARGET).unwrap_err();
+        assert!(matches!(e, ObexError::Refused(0xC3)), "{e}");
+        assert!(e.is_access_denied());
+    }
+
+    #[test]
     fn refused_get_reports_the_code() {
         let phone = FakePhone::new(vec![connect_reply(1, 0x1000), reply(0xC3, &[])]);
         let mut c = ObexClient::new(phone);
