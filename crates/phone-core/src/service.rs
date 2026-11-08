@@ -101,6 +101,8 @@ pub enum Command {
         text: String,
     },
     ReloadContacts,
+    /// Bring the call's voice to this computer.
+    AudioHere,
     /// Use this paired phone from now on.
     SelectPhone(String),
     SetSettings(Settings),
@@ -240,6 +242,10 @@ impl Handle {
             text: text.to_string(),
         });
         token
+    }
+    /// Moves the current call's voice to this computer.
+    pub fn audio_here(&self) {
+        self.send(Command::AudioHere);
     }
     pub fn set_settings(&self, s: Settings) {
         self.send(Command::SetSettings(s));
@@ -872,6 +878,12 @@ fn command_loop(
                 let _ = msg_tx.send((token, number, text));
                 Ok(())
             }
+            Command::AudioHere => need_phone().and_then(|p| {
+                inner
+                    .platform
+                    .activate_audio(&p.address)
+                    .map_err(|e| e.to_string())
+            }),
             Command::ReloadContacts => {
                 let _ = contacts_tx.send(());
                 Ok(())

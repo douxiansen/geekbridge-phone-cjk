@@ -54,4 +54,7 @@ impl Platform for LinuxPlatform {
     fn send_tones(&self, address: &str, tones: &str) -> Result<()> {
         dbus::send_tones(&self.session, address, tones)
     }
+    fn activate_audio(&self, address: &str) -> Result<()> {
+        dbus::activate_audio(&self.session, address)
+    }
 }

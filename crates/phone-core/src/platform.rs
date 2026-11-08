@@ -45,4 +45,11 @@ pub trait Platform: Send + Sync {
     fn hang_up(&self, address: &str, call_id: &str) -> Result<()>;
     fn hang_up_all(&self, address: &str) -> Result<()>;
     fn send_tones(&self, address: &str, tones: &str) -> Result<()>;
+    /// Moves the call's voice onto this computer's speakers and microphone.
+    /// Platforms whose system does this by itself keep the default.
+    fn activate_audio(&self, _address: &str) -> Result<()> {
+        Err(PlatformError::Other(
+            "this system moves call audio by itself".into(),
+        ))
+    }
 }

@@ -170,6 +170,21 @@ pub fn hang_up_all(session: &Connection, address: &str) -> Result<()> {
         .map_err(other)
 }
 
+/// Asks the gateway to open the audio link to this computer.
+pub fn activate_audio(session: &Connection, address: &str) -> Result<()> {
+    let path = gateway_path(session, address)?;
+    session
+        .call_method(
+            Some(TELEPHONY),
+            path.as_str(),
+            Some("org.pipewire.Telephony.AudioGatewayTransport1"),
+            "Activate",
+            &(),
+        )
+        .map(|_| ())
+        .map_err(other)
+}
+
 pub fn send_tones(session: &Connection, address: &str, tones: &str) -> Result<()> {
     let path = gateway_path(session, address)?;
     session
