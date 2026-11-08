@@ -4,6 +4,7 @@
 
 pub mod dbus;
 pub mod platform;
+pub mod recorder;
 pub mod sdp;
 
 pub use platform::LinuxPlatform;

@@ -4,6 +4,7 @@
 use crate::{dbus, rfcomm_connect, sdp};
 use phone_core::calls::CallSnapshot;
 use phone_core::platform::{PhoneInfo, Platform, PlatformError, Result, Stream};
+use phone_core::recording::Recorder;
 use zbus::blocking::Connection;
 
 pub struct LinuxPlatform {
@@ -53,6 +54,11 @@ impl Platform for LinuxPlatform {
     }
     fn send_tones(&self, address: &str, tones: &str) -> Result<()> {
         dbus::send_tones(&self.session, address, tones)
+    }
+    fn start_recording(&self, address: &str, dir: &std::path::Path) -> Result<Box<dyn Recorder>> {
+        Ok(Box::new(crate::recorder::LinuxRecorder::start(
+            address, dir,
+        )?))
     }
     fn activate_audio(&self, address: &str) -> Result<()> {
         dbus::activate_audio(&self.session, address)
