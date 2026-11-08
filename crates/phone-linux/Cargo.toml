@@ -1,0 +1,11 @@
+[package]
+name = "phone-linux"
+description = "Linux Bluetooth transport: a plain RFCOMM socket to a paired phone"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+libc = "0.2"
+phone-obex = { path = "../phone-obex" }

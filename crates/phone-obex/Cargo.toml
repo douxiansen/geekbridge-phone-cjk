@@ -1,0 +1,11 @@
+[package]
+name = "phone-obex"
+description = "Portable OBEX client with Bluetooth MAP (SMS) and PBAP (phonebook) on top, no OS dependencies"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+roxmltree = "0.20"
+thiserror = "2"
