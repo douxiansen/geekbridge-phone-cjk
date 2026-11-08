@@ -5,6 +5,8 @@
 pub mod calls;
 pub mod contacts;
 pub mod conversations;
+#[cfg(feature = "demo")]
+pub mod demo;
 pub mod platform;
 pub mod recents;
 pub mod service;
