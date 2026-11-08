@@ -19,14 +19,21 @@ impl Paths {
     /// The platform's standard folders.
     pub fn standard() -> Self {
         Self {
-            config: dirs::config_dir().unwrap_or_else(std::env::temp_dir).join(APP_DIR),
-            data: dirs::data_dir().unwrap_or_else(std::env::temp_dir).join(APP_DIR),
+            config: dirs::config_dir()
+                .unwrap_or_else(std::env::temp_dir)
+                .join(APP_DIR),
+            data: dirs::data_dir()
+                .unwrap_or_else(std::env::temp_dir)
+                .join(APP_DIR),
         }
     }
 
     /// Both folders under one root (for tests).
     pub fn under(root: &Path) -> Self {
-        Self { config: root.join("config"), data: root.join("data") }
+        Self {
+            config: root.join("config"),
+            data: root.join("data"),
+        }
     }
 }
 
@@ -35,7 +42,10 @@ impl Paths {
 pub fn load<T: DeserializeOwned + Default>(path: &Path) -> T {
     match fs::read(path) {
         Ok(bytes) => serde_json::from_slice(&bytes).unwrap_or_else(|e| {
-            log::warn!("{} is unreadable ({e}); keeping it as .bad and starting fresh", path.display());
+            log::warn!(
+                "{} is unreadable ({e}); keeping it as .bad and starting fresh",
+                path.display()
+            );
             let _ = fs::rename(path, path.with_extension("bad"));
             T::default()
         }),
@@ -49,13 +59,48 @@ pub fn load<T: DeserializeOwned + Default>(path: &Path) -> T {
 
 /// Writes `value` atomically: a temp file, then a rename, so a crash never
 /// leaves half a file.
+///
+/// The files hold contacts and texts, so on Unix they are owner-only (0600) in
+/// owner-only folders (0700).
 pub fn save<T: Serialize>(path: &Path, value: &T) -> io::Result<()> {
     if let Some(dir) = path.parent() {
-        fs::create_dir_all(dir)?;
+        create_private_dir(dir)?;
     }
     let tmp = path.with_extension("tmp");
-    fs::write(&tmp, serde_json::to_vec_pretty(value).map_err(io::Error::other)?)?;
+    write_private(
+        &tmp,
+        &serde_json::to_vec_pretty(value).map_err(io::Error::other)?,
+    )?;
     fs::rename(tmp, path)
+}
+
+fn create_private_dir(dir: &Path) -> io::Result<()> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::DirBuilderExt;
+        fs::DirBuilder::new()
+            .recursive(true)
+            .mode(0o700)
+            .create(dir)
+    }
+    #[cfg(not(unix))]
+    {
+        fs::create_dir_all(dir)
+    }
+}
+
+fn write_private(path: &Path, bytes: &[u8]) -> io::Result<()> {
+    use std::io::Write;
+    let mut opts = fs::OpenOptions::new();
+    opts.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        opts.mode(0o600);
+    }
+    let mut file = opts.open(path)?;
+    file.write_all(bytes)?;
+    file.sync_all()
 }
 
 #[cfg(test)]
@@ -73,9 +118,34 @@ mod tests {
     fn round_trips() {
         let dir = temp("rt");
         let p = dir.join("s.json");
-        let s = Settings { notify_texts: false, ..Settings::default() };
+        let s = Settings {
+            notify_texts: false,
+            ..Settings::default()
+        };
         save(&p, &s).unwrap();
         assert_eq!(load::<Settings>(&p), s);
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn files_and_folders_are_private() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = temp("perm");
+        let p = dir.join("sub").join("s.json");
+        save(&p, &Settings::default()).unwrap();
+        assert_eq!(
+            fs::metadata(&p).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+        assert_eq!(
+            fs::metadata(p.parent().unwrap())
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o777,
+            0o700
+        );
         let _ = fs::remove_dir_all(dir);
     }
 

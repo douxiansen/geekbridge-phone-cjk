@@ -38,7 +38,11 @@ pub struct ObexClient<S: Read + Write> {
 
 impl<S: Read + Write> ObexClient<S> {
     pub fn new(stream: S) -> Self {
-        Self { stream, connection_id: None, peer_max: 255 }
+        Self {
+            stream,
+            connection_id: None,
+            peer_max: 255,
+        }
     }
 
     pub fn into_inner(self) -> S {
@@ -104,7 +108,11 @@ impl<S: Read + Write> ObexClient<S> {
     pub fn set_path(&mut self, name: &str, backup: bool) -> Result<(), ObexError> {
         // Flags: bit 0 = back up one level, bit 1 = do not create. Never create.
         let flags = 0x02 | u8::from(backup);
-        let headers = if backup { vec![] } else { vec![Header::Name(name.to_string())] };
+        let headers = if backup {
+            vec![]
+        } else {
+            vec![Header::Name(name.to_string())]
+        };
         let request = encode_request(OP_SETPATH, &[flags, 0x00], &self.with_connection(headers));
         let rsp = self.exchange(&request, 0)?;
         if rsp.code != RSP_SUCCESS {
@@ -155,7 +163,10 @@ impl<S: Read + Write> ObexClient<S> {
         app_params: Option<Vec<u8>>,
         body: &[u8],
     ) -> Result<(), ObexError> {
-        let mut first = vec![Header::Name(name.to_string()), Header::Type(type_.to_string())];
+        let mut first = vec![
+            Header::Name(name.to_string()),
+            Header::Type(type_.to_string()),
+        ];
         if let Some(p) = app_params {
             first.push(Header::AppParams(p));
         }
@@ -168,8 +179,16 @@ impl<S: Read + Write> ObexClient<S> {
             let take = room.min(rest.len());
             let (chunk, tail) = rest.split_at(take);
             let last = tail.is_empty();
-            let mut headers = if is_first { first.clone() } else { self.with_connection(vec![]) };
-            headers.push(if last { Header::EndOfBody(chunk.to_vec()) } else { Header::Body(chunk.to_vec()) });
+            let mut headers = if is_first {
+                first.clone()
+            } else {
+                self.with_connection(vec![])
+            };
+            headers.push(if last {
+                Header::EndOfBody(chunk.to_vec())
+            } else {
+                Header::Body(chunk.to_vec())
+            });
             let request = encode_request(if last { OP_PUT_FINAL } else { OP_PUT }, &[], &headers);
             let rsp = self.exchange(&request, 0)?;
             match (last, rsp.code) {
@@ -190,17 +209,25 @@ pub(crate) mod testing {
     use std::io::{Read, Write};
 
     /// A phone that answers with canned packets and records what it was sent.
+    /// Answers one request packet with one response packet.
+    pub type Responder = Box<dyn FnMut(&[u8]) -> Vec<u8>>;
+
     pub struct FakePhone {
         pub replies: VecDeque<Vec<u8>>,
         pub pending: Vec<u8>,
         pub sent: Vec<Vec<u8>>,
         /// When set, answers each request itself instead of using `replies`.
-        pub responder: Option<Box<dyn FnMut(&[u8]) -> Vec<u8>>>,
+        pub responder: Option<Responder>,
     }
 
     impl FakePhone {
         pub fn new(replies: Vec<Vec<u8>>) -> Self {
-            Self { replies: replies.into(), pending: vec![], sent: vec![], responder: None }
+            Self {
+                replies: replies.into(),
+                pending: vec![],
+                sent: vec![],
+                responder: None,
+            }
         }
     }
 
@@ -239,7 +266,10 @@ mod tests {
     use super::testing::FakePhone;
     use super::*;
 
-    const TARGET: [u8; 16] = [0xBB, 0x58, 0x2B, 0x40, 0x42, 0x0C, 0x11, 0xDB, 0xB0, 0xDE, 0x08, 0x00, 0x20, 0x0C, 0x9A, 0x66];
+    const TARGET: [u8; 16] = [
+        0xBB, 0x58, 0x2B, 0x40, 0x42, 0x0C, 0x11, 0xDB, 0xB0, 0xDE, 0x08, 0x00, 0x20, 0x0C, 0x9A,
+        0x66,
+    ];
 
     fn connect_reply(conn_id: u32, max: u16) -> Vec<u8> {
         let mut body = vec![0x10, 0x00];

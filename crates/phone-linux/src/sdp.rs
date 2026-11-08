@@ -54,8 +54,14 @@ pub fn parse_element(data: &[u8]) -> Option<(Element, usize)> {
         3 => (8, 1),
         4 => (16, 1),
         5 => (*data.get(1)? as usize, 2),
-        6 => (u16::from_be_bytes([*data.get(1)?, *data.get(2)?]) as usize, 3),
-        _ => (u32::from_be_bytes(data.get(1..5)?.try_into().ok()?) as usize, 5),
+        6 => (
+            u16::from_be_bytes([*data.get(1)?, *data.get(2)?]) as usize,
+            3,
+        ),
+        _ => (
+            u32::from_be_bytes(data.get(1..5)?.try_into().ok()?) as usize,
+            5,
+        ),
     };
     let body = data.get(hdr..hdr + len)?;
     let element = match ty {
@@ -80,21 +86,29 @@ pub fn parse_element(data: &[u8]) -> Option<(Element, usize)> {
 
 /// Finds the RFCOMM channel in a ProtocolDescriptorList value.
 fn rfcomm_channel(list: &Element) -> Option<u8> {
-    let Element::Seq(protocols) = list else { return None };
+    let Element::Seq(protocols) = list else {
+        return None;
+    };
     protocols.iter().find_map(|p| match p {
-        Element::Seq(parts) if parts.first() == Some(&Element::Uuid(UUID_RFCOMM)) => match parts.get(1) {
-            Some(Element::Uint(ch)) => u8::try_from(*ch).ok(),
-            _ => None,
-        },
+        Element::Seq(parts) if parts.first() == Some(&Element::Uuid(UUID_RFCOMM)) => {
+            match parts.get(1) {
+                Some(Element::Uint(ch)) => u8::try_from(*ch).ok(),
+                _ => None,
+            }
+        }
         _ => None,
     })
 }
 
 /// Walks the attribute lists of a response and returns the first RFCOMM channel.
 pub fn channel_from_attribute_lists(data: &[u8]) -> Option<u8> {
-    let (Element::Seq(records), _) = parse_element(data)? else { return None };
+    let (Element::Seq(records), _) = parse_element(data)? else {
+        return None;
+    };
     for record in records {
-        let Element::Seq(attrs) = record else { continue };
+        let Element::Seq(attrs) = record else {
+            continue;
+        };
         for pair in attrs.chunks(2) {
             if let [Element::Uint(id), value] = pair {
                 if *id == ATTR_PROTOCOL_DESCRIPTOR_LIST as u64 {
@@ -114,7 +128,7 @@ fn build_request(tid: u16, service: u16, continuation: &[u8]) -> Vec<u8> {
     params.extend_from_slice(&[0x35, 0x03, 0x19]);
     params.extend_from_slice(&service.to_be_bytes());
     params.extend_from_slice(&0xFFFFu16.to_be_bytes()); // max attribute bytes
-    // AttributeIDList: a sequence holding the one attribute id we want.
+                                                        // AttributeIDList: a sequence holding the one attribute id we want.
     params.extend_from_slice(&[0x35, 0x03, 0x09]);
     params.extend_from_slice(&ATTR_PROTOCOL_DESCRIPTOR_LIST.to_be_bytes());
     params.push(continuation.len() as u8);
@@ -129,7 +143,11 @@ fn build_request(tid: u16, service: u16, continuation: &[u8]) -> Vec<u8> {
 fn connect_l2cap(bdaddr: [u8; 6]) -> io::Result<File> {
     // SAFETY: plain socket(2)/connect(2) calls; the fd is owned from here on.
     unsafe {
-        let fd = libc::socket(AF_BLUETOOTH, libc::SOCK_SEQPACKET | libc::SOCK_CLOEXEC, BTPROTO_L2CAP);
+        let fd = libc::socket(
+            AF_BLUETOOTH,
+            libc::SOCK_SEQPACKET | libc::SOCK_CLOEXEC,
+            BTPROTO_L2CAP,
+        );
         if fd < 0 {
             return Err(io::Error::last_os_error());
         }
@@ -163,17 +181,25 @@ pub fn find_channel(address: &str, service: u16) -> io::Result<Option<u8>> {
         let n = sock.read(&mut buf)?;
         let rsp = &buf[..n];
         if rsp.len() < 5 {
-            return Err(io::Error::new(io::ErrorKind::InvalidData, "short SDP response"));
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "short SDP response",
+            ));
         }
         match rsp[0] {
             PDU_SEARCH_ATTR_RSP => {}
             PDU_ERROR => return Ok(None),
-            _ => return Err(io::Error::new(io::ErrorKind::InvalidData, "unexpected SDP PDU")),
+            _ => {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "unexpected SDP PDU",
+                ))
+            }
         }
         let count = u16::from_be_bytes([rsp[5], rsp[6]]) as usize;
-        let lists = rsp
-            .get(7..7 + count)
-            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "truncated SDP attributes"))?;
+        let lists = rsp.get(7..7 + count).ok_or_else(|| {
+            io::Error::new(io::ErrorKind::InvalidData, "truncated SDP attributes")
+        })?;
         collected.extend_from_slice(lists);
         let cont_len = *rsp.get(7 + count).unwrap_or(&0) as usize;
         if cont_len == 0 {

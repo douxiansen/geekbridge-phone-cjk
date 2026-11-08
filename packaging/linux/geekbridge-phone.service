@@ -1,0 +1,14 @@
+[Unit]
+Description=GeekBridge Phone (calls and texts from your Bluetooth phone)
+Documentation=https://github.com/fspecii/geekbridge-phone
+After=graphical-session.target bluetooth.target pipewire.service
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=@BINDIR@/geekbridge-phone --background
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=graphical-session.target

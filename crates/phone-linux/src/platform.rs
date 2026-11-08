@@ -13,8 +13,10 @@ pub struct LinuxPlatform {
 
 impl LinuxPlatform {
     pub fn new() -> Result<Self> {
-        let system = Connection::system().map_err(|e| PlatformError::Other(format!("system bus: {e}")))?;
-        let session = Connection::session().map_err(|e| PlatformError::Other(format!("session bus: {e}")))?;
+        let system =
+            Connection::system().map_err(|e| PlatformError::Other(format!("system bus: {e}")))?;
+        let session =
+            Connection::session().map_err(|e| PlatformError::Other(format!("session bus: {e}")))?;
         Ok(Self { system, session })
     }
 
@@ -51,5 +53,8 @@ impl Platform for LinuxPlatform {
     }
     fn send_tones(&self, address: &str, tones: &str) -> Result<()> {
         dbus::send_tones(&self.session, address, tones)
+    }
+    fn activate_audio(&self, address: &str) -> Result<()> {
+        dbus::activate_audio(&self.session, address)
     }
 }

@@ -27,7 +27,13 @@ pub struct Message {
 
 impl Message {
     fn identity(&self) -> String {
-        format!("{}|{}|{}|{}", self.incoming, number_key(&self.number), self.at, self.text)
+        format!(
+            "{}|{}|{}|{}",
+            self.incoming,
+            number_key(&self.number),
+            self.at,
+            self.text
+        )
     }
 }
 
@@ -47,7 +53,10 @@ impl Conversation {
     }
 
     pub fn unread(&self) -> usize {
-        self.messages.iter().filter(|m| m.incoming && !m.read).count()
+        self.messages
+            .iter()
+            .filter(|m| m.incoming && !m.read)
+            .count()
     }
 }
 
@@ -66,7 +75,10 @@ pub fn parse_map_time(stamp: &str) -> Option<i64> {
             let h: i32 = z[1..3].parse().ok()?;
             let m: i32 = z[3..5].parse().ok()?;
             let off = (h * 3600 + m * 60) * if z.starts_with('-') { -1 } else { 1 };
-            FixedOffset::east_opt(off)?.from_local_datetime(&naive).earliest()?.timestamp()
+            FixedOffset::east_opt(off)?
+                .from_local_datetime(&naive)
+                .earliest()?
+                .timestamp()
         }
         _ => return None,
     };
@@ -74,7 +86,11 @@ pub fn parse_map_time(stamp: &str) -> Option<i64> {
 }
 
 fn to_message(e: &MessageEntry, incoming: bool) -> Option<Message> {
-    let number = if incoming { &e.sender_address } else { &e.recipient_address };
+    let number = if incoming {
+        &e.sender_address
+    } else {
+        &e.recipient_address
+    };
     if number.is_empty() {
         return None;
     }
@@ -143,7 +159,14 @@ impl Conversations {
 
     /// A text sent from here, shown at once until the phone lists it.
     pub fn add_pending(&mut self, number: &str, text: &str, now: i64) {
-        self.pending.push(Message { number: number.into(), incoming: false, text: text.into(), at: now, read: true, pending: true });
+        self.pending.push(Message {
+            number: number.into(),
+            incoming: false,
+            text: text.into(),
+            at: now,
+            read: true,
+            pending: true,
+        });
     }
 
     /// Drops pending texts that never showed up.
@@ -160,7 +183,11 @@ impl Conversations {
             let key = number_key(&m.number);
             match by_key.iter_mut().find(|c| c.key == key) {
                 Some(c) => c.messages.push(m.clone()),
-                None => by_key.push(Conversation { key, number: m.number.clone(), messages: vec![m.clone()] }),
+                None => by_key.push(Conversation {
+                    key,
+                    number: m.number.clone(),
+                    messages: vec![m.clone()],
+                }),
             }
         }
         for c in &mut by_key {
@@ -172,7 +199,11 @@ impl Conversations {
 
     pub fn thread(&self, number: &str) -> Vec<Message> {
         let key = number_key(number);
-        self.conversations().into_iter().find(|c| c.key == key).map(|c| c.messages).unwrap_or_default()
+        self.conversations()
+            .into_iter()
+            .find(|c| c.key == key)
+            .map(|c| c.messages)
+            .unwrap_or_default()
     }
 
     pub fn unread_total(&self) -> usize {
@@ -192,15 +223,25 @@ impl InboxWatcher {
     /// `known` is what is already stored: when it is empty this is a first
     /// run, and the first listing is recorded without announcing anything.
     pub fn new(known: &Conversations) -> Self {
-        let seen = known.stored.iter().filter(|m| m.incoming).map(Message::identity).collect();
-        Self { seen, baselined: !known.is_empty() }
+        let seen = known
+            .stored
+            .iter()
+            .filter(|m| m.incoming)
+            .map(Message::identity)
+            .collect();
+        Self {
+            seen,
+            baselined: !known.is_empty(),
+        }
     }
 
     /// Unread texts not seen before, oldest first.
     pub fn take_new(&mut self, inbox: &[MessageEntry]) -> Vec<Message> {
         let mut fresh = Vec::new();
         for e in inbox {
-            let Some(m) = to_message(e, true) else { continue };
+            let Some(m) = to_message(e, true) else {
+                continue;
+            };
             if self.seen.insert(m.identity()) && self.baselined && !m.read {
                 fresh.push(m);
             }
@@ -234,7 +275,10 @@ mod tests {
     fn parses_map_timestamps() {
         assert!(parse_map_time("20260417T123456").is_some());
         assert_eq!(parse_map_time("20260417T123456Z"), Some(1776429296));
-        assert_eq!(parse_map_time("20260417T123456+0200"), Some(1776429296 - 7200));
+        assert_eq!(
+            parse_map_time("20260417T123456+0200"),
+            Some(1776429296 - 7200)
+        );
         assert_eq!(parse_map_time("garbage"), None);
         assert_eq!(parse_map_time("20260417"), None);
     }
@@ -243,7 +287,10 @@ mod tests {
     fn groups_by_person_across_number_formats() {
         let mut c = Conversations::default();
         c.ingest(
-            &[entry("+49 111 222 333", "", "hi", "20260101T100000Z", true), entry("+49 999 888 777", "", "later", "20260102T090000Z", false)],
+            &[
+                entry("+49 111 222 333", "", "hi", "20260101T100000Z", true),
+                entry("+49 999 888 777", "", "later", "20260102T090000Z", false),
+            ],
             &[entry("", "0111222333", "hello", "20260101T100100Z", true)],
         );
         let convs = c.conversations();
@@ -285,7 +332,10 @@ mod tests {
         let t = c.thread("+49123");
         assert!(t[0].pending);
         // The phone lists it a little later.
-        let dt = chrono::DateTime::from_timestamp(1_050, 0).unwrap().format("%Y%m%dT%H%M%SZ").to_string();
+        let dt = chrono::DateTime::from_timestamp(1_050, 0)
+            .unwrap()
+            .format("%Y%m%dT%H%M%SZ")
+            .to_string();
         c.ingest(&[], &[entry("", "+49123", "on my way", &dt, true)]);
         let t = c.thread("+49123");
         assert_eq!(t.len(), 1);
@@ -319,7 +369,10 @@ mod tests {
         let mut stored = Conversations::default();
         stored.ingest(&[entry("+1", "", "old", "20260101T100000Z", true)], &[]);
         let mut w = InboxWatcher::new(&stored);
-        let fresh = w.take_new(&[entry("+1", "", "old", "20260101T100000Z", true), entry("+1", "", "while away", "20260102T100000Z", false)]);
+        let fresh = w.take_new(&[
+            entry("+1", "", "old", "20260101T100000Z", true),
+            entry("+1", "", "while away", "20260102T100000Z", false),
+        ]);
         assert_eq!(fresh.len(), 1);
         assert_eq!(fresh[0].text, "while away");
     }

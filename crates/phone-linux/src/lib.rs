@@ -32,7 +32,11 @@ const IO_TIMEOUT_SECS: libc::time_t = 12;
 ///
 /// # Safety
 /// `fd` must be an open socket and `addr` must point to `len` valid bytes.
-pub(crate) unsafe fn connect_with_timeout(fd: libc::c_int, addr: *const libc::sockaddr, len: libc::socklen_t) -> io::Result<()> {
+pub(crate) unsafe fn connect_with_timeout(
+    fd: libc::c_int,
+    addr: *const libc::sockaddr,
+    len: libc::socklen_t,
+) -> io::Result<()> {
     let flags = libc::fcntl(fd, libc::F_GETFL);
     if flags < 0 || libc::fcntl(fd, libc::F_SETFL, flags | libc::O_NONBLOCK) < 0 {
         return Err(io::Error::last_os_error());
@@ -42,17 +46,31 @@ pub(crate) unsafe fn connect_with_timeout(fd: libc::c_int, addr: *const libc::so
         if err.raw_os_error() != Some(libc::EINPROGRESS) {
             return Err(err);
         }
-        let mut pfd = libc::pollfd { fd, events: libc::POLLOUT, revents: 0 };
+        let mut pfd = libc::pollfd {
+            fd,
+            events: libc::POLLOUT,
+            revents: 0,
+        };
         let n = libc::poll(&mut pfd, 1, CONNECT_TIMEOUT_MS);
         if n == 0 {
-            return Err(io::Error::new(io::ErrorKind::TimedOut, "Bluetooth connect timed out"));
+            return Err(io::Error::new(
+                io::ErrorKind::TimedOut,
+                "Bluetooth connect timed out",
+            ));
         }
         if n < 0 {
             return Err(io::Error::last_os_error());
         }
         let mut so_err: libc::c_int = 0;
         let mut so_len = std::mem::size_of::<libc::c_int>() as libc::socklen_t;
-        if libc::getsockopt(fd, libc::SOL_SOCKET, libc::SO_ERROR, &mut so_err as *mut _ as *mut libc::c_void, &mut so_len) < 0 {
+        if libc::getsockopt(
+            fd,
+            libc::SOL_SOCKET,
+            libc::SO_ERROR,
+            &mut so_err as *mut _ as *mut libc::c_void,
+            &mut so_len,
+        ) < 0
+        {
             return Err(io::Error::last_os_error());
         }
         if so_err != 0 {
@@ -62,9 +80,19 @@ pub(crate) unsafe fn connect_with_timeout(fd: libc::c_int, addr: *const libc::so
     if libc::fcntl(fd, libc::F_SETFL, flags) < 0 {
         return Err(io::Error::last_os_error());
     }
-    let tv = libc::timeval { tv_sec: IO_TIMEOUT_SECS, tv_usec: 0 };
+    let tv = libc::timeval {
+        tv_sec: IO_TIMEOUT_SECS,
+        tv_usec: 0,
+    };
     for opt in [libc::SO_RCVTIMEO, libc::SO_SNDTIMEO] {
-        if libc::setsockopt(fd, libc::SOL_SOCKET, opt, &tv as *const _ as *const libc::c_void, std::mem::size_of::<libc::timeval>() as libc::socklen_t) < 0 {
+        if libc::setsockopt(
+            fd,
+            libc::SOL_SOCKET,
+            opt,
+            &tv as *const _ as *const libc::c_void,
+            std::mem::size_of::<libc::timeval>() as libc::socklen_t,
+        ) < 0
+        {
             return Err(io::Error::last_os_error());
         }
     }
@@ -95,12 +123,20 @@ pub fn rfcomm_connect(address: &str, channel: u8) -> io::Result<File> {
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "bad Bluetooth address"))?;
     // SAFETY: plain socket(2)/connect(2) calls; the fd is owned from here on.
     unsafe {
-        let fd = libc::socket(AF_BLUETOOTH, libc::SOCK_STREAM | libc::SOCK_CLOEXEC, BTPROTO_RFCOMM);
+        let fd = libc::socket(
+            AF_BLUETOOTH,
+            libc::SOCK_STREAM | libc::SOCK_CLOEXEC,
+            BTPROTO_RFCOMM,
+        );
         if fd < 0 {
             return Err(io::Error::last_os_error());
         }
         let owned = OwnedFd::from_raw_fd(fd);
-        let addr = SockaddrRc { family: AF_BLUETOOTH as libc::sa_family_t, bdaddr, channel };
+        let addr = SockaddrRc {
+            family: AF_BLUETOOTH as libc::sa_family_t,
+            bdaddr,
+            channel,
+        };
         connect_with_timeout(
             fd,
             &addr as *const SockaddrRc as *const libc::sockaddr,
@@ -116,7 +152,10 @@ mod tests {
 
     #[test]
     fn address_is_reversed_for_the_kernel() {
-        assert_eq!(parse_address("AA:BB:CC:DD:EE:FF"), Some([0xDA, 0x46, 0x5C, 0xC2, 0xAC, 0x6C]));
+        assert_eq!(
+            parse_address("AA:BB:CC:DD:EE:FF"),
+            Some([0xDA, 0x46, 0x5C, 0xC2, 0xAC, 0x6C])
+        );
         assert_eq!(parse_address("nope"), None);
         assert_eq!(parse_address("AA:BB:CC:DD:EE"), None);
     }

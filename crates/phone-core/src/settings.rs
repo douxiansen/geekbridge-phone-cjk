@@ -30,6 +30,12 @@ pub struct Settings {
     pub load_contacts_on_connect: bool,
     /// How often the inbox is checked, in seconds (2 to 60).
     pub inbox_poll_secs: u32,
+    /// Record calls to audio files. Off by default: recording a call needs
+    /// the other person's consent in many places.
+    pub record_calls: bool,
+    /// Where recordings go; `None` means `~/Music/GeekBridge Calls` (or the
+    /// platform's equivalent).
+    pub recordings_dir: Option<String>,
 }
 
 impl Default for Settings {
@@ -46,6 +52,8 @@ impl Default for Settings {
             start_minimised: false,
             load_contacts_on_connect: true,
             inbox_poll_secs: 5,
+            record_calls: false,
+            recordings_dir: None,
         }
     }
 }
@@ -79,7 +87,12 @@ mod tests {
 
     #[test]
     fn silly_values_are_clamped() {
-        let s = Settings { inbox_poll_secs: 0, text_banner_secs: 9999, ..Settings::default() }.sanitised();
+        let s = Settings {
+            inbox_poll_secs: 0,
+            text_banner_secs: 9999,
+            ..Settings::default()
+        }
+        .sanitised();
         assert_eq!(s.inbox_poll_secs, 2);
         assert_eq!(s.text_banner_secs, 60);
     }

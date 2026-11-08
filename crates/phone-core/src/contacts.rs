@@ -65,7 +65,11 @@ impl ContactBook {
             .into_iter()
             .filter(|c| !c.numbers.is_empty())
             .map(|c| Contact {
-                name: if c.name.trim().is_empty() { c.numbers[0].clone() } else { c.name },
+                name: if c.name.trim().is_empty() {
+                    c.numbers[0].clone()
+                } else {
+                    c.name
+                },
                 numbers: c.numbers,
             })
             .collect();
@@ -103,7 +107,8 @@ impl ContactBook {
 
     /// A name to show: the contact's, else the number itself.
     pub fn display(&self, number: &str) -> String {
-        self.name_for(number).map_or_else(|| number.to_string(), str::to_string)
+        self.name_for(number)
+            .map_or_else(|| number.to_string(), str::to_string)
     }
 
     /// Contacts matching `query` by name, by number, or by keypad digits
@@ -114,7 +119,11 @@ impl ContactBook {
             return self.contacts.iter().collect();
         }
         let q_digits: String = q.chars().filter(char::is_ascii_digit).collect();
-        let all_digits = !q_digits.is_empty() && q_digits.len() == q.chars().filter(|c| !matches!(c, ' ' | '-' | '+' | '(' | ')')).count();
+        let all_digits = !q_digits.is_empty()
+            && q_digits.len()
+                == q.chars()
+                    .filter(|c| !matches!(c, ' ' | '-' | '+' | '(' | ')'))
+                    .count();
         self.contacts
             .iter()
             .filter(|c| {
@@ -123,7 +132,12 @@ impl ContactBook {
                     return true;
                 }
                 if all_digits {
-                    if c.numbers.iter().any(|n| n.chars().filter(char::is_ascii_digit).collect::<String>().contains(&q_digits)) {
+                    if c.numbers.iter().any(|n| {
+                        n.chars()
+                            .filter(char::is_ascii_digit)
+                            .collect::<String>()
+                            .contains(&q_digits)
+                    }) {
                         return true;
                     }
                     let keypad: String = name.chars().filter_map(keypad_digit).collect();
@@ -141,10 +155,26 @@ mod tests {
 
     fn book() -> ContactBook {
         ContactBook::from_cards(vec![
-            Card { name: "Zoé Martin".into(), numbers: vec!["+33 6 12 34 56 78".into()], call_time: None },
-            Card { name: "Alí".into(), numbers: vec!["0550123456".into(), "+213550123457".into()], call_time: None },
-            Card { name: "".into(), numbers: vec!["999".into()], call_time: None },
-            Card { name: "No numbers".into(), numbers: vec![], call_time: None },
+            Card {
+                name: "Zoé Martin".into(),
+                numbers: vec!["+33 6 12 34 56 78".into()],
+                call_time: None,
+            },
+            Card {
+                name: "Alí".into(),
+                numbers: vec!["0550123456".into(), "+213550123457".into()],
+                call_time: None,
+            },
+            Card {
+                name: "".into(),
+                numbers: vec!["999".into()],
+                call_time: None,
+            },
+            Card {
+                name: "No numbers".into(),
+                numbers: vec![],
+                call_time: None,
+            },
         ])
     }
 

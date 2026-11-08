@@ -45,8 +45,10 @@ fn app_param(out: &mut Vec<u8>, tag: u8, value: &[u8]) {
 
 /// Parses a MAP message listing document.
 pub fn parse_message_listing(xml: &[u8]) -> Result<Vec<MessageEntry>, ObexError> {
-    let text = std::str::from_utf8(xml).map_err(|_| ObexError::Malformed("listing is not UTF-8"))?;
-    let doc = roxmltree::Document::parse(text).map_err(|_| ObexError::Malformed("listing is not XML"))?;
+    let text =
+        std::str::from_utf8(xml).map_err(|_| ObexError::Malformed("listing is not UTF-8"))?;
+    let doc =
+        roxmltree::Document::parse(text).map_err(|_| ObexError::Malformed("listing is not XML"))?;
     let attr = |n: &roxmltree::Node, k: &str| n.attribute(k).unwrap_or("").to_string();
     Ok(doc
         .descendants()
@@ -90,7 +92,8 @@ impl<S: Read + Write> MapClient<S> {
     pub fn list_folders(&mut self) -> Result<Vec<String>, ObexError> {
         let data = self.obex.get(TYPE_FOLDER_LISTING, None, None)?;
         let text = String::from_utf8_lossy(&data).into_owned();
-        let doc = roxmltree::Document::parse(&text).map_err(|_| ObexError::Malformed("folder listing"))?;
+        let doc = roxmltree::Document::parse(&text)
+            .map_err(|_| ObexError::Malformed("folder listing"))?;
         Ok(doc
             .descendants()
             .filter(|n| n.has_tag_name("folder"))
@@ -99,7 +102,11 @@ impl<S: Read + Write> MapClient<S> {
     }
 
     /// Lists messages in the current folder.
-    pub fn list_messages(&mut self, max: u16, subject_len: u8) -> Result<Vec<MessageEntry>, ObexError> {
+    pub fn list_messages(
+        &mut self,
+        max: u16,
+        subject_len: u8,
+    ) -> Result<Vec<MessageEntry>, ObexError> {
         let mut params = Vec::new();
         app_param(&mut params, TAG_MAX_LIST_COUNT, &max.to_be_bytes());
         app_param(&mut params, TAG_START_OFFSET, &0u16.to_be_bytes());
@@ -119,11 +126,17 @@ impl<S: Read + Write> MapClient<S> {
 
     /// Sends a text through the phone's outbox.
     pub fn send_sms(&mut self, number: &str, text: &str) -> Result<(), ObexError> {
-        let number = bmessage::clean_number(number).ok_or(ObexError::Protocol("not a phone number"))?;
+        let number =
+            bmessage::clean_number(number).ok_or(ObexError::Protocol("not a phone number"))?;
         self.set_folder("/telecom/msg/outbox")?;
         let mut params = Vec::new();
         app_param(&mut params, TAG_CHARSET, &[CHARSET_UTF8]);
-        self.obex.put(TYPE_MESSAGE, "", Some(params), &bmessage::build_sms(&number, text))
+        self.obex.put(
+            TYPE_MESSAGE,
+            "",
+            Some(params),
+            &bmessage::build_sms(&number, text),
+        )
     }
 
     pub fn close(mut self) -> Result<S, ObexError> {
@@ -177,7 +190,10 @@ mod tests {
 
     #[test]
     fn lists_messages_over_the_wire() {
-        let phone = FakePhone::new(vec![connect_ok(), ok(&[Header::EndOfBody(LISTING.as_bytes().to_vec())])]);
+        let phone = FakePhone::new(vec![
+            connect_ok(),
+            ok(&[Header::EndOfBody(LISTING.as_bytes().to_vec())]),
+        ]);
         let mut map = MapClient::connect(phone).unwrap();
         let msgs = map.list_messages(100, 255).unwrap();
         assert_eq!(msgs.len(), 2);
@@ -187,7 +203,16 @@ mod tests {
         assert_eq!(get[0], OP_GET_FINAL);
         let hdrs = decode_headers(&get[3..]).unwrap();
         assert!(hdrs.contains(&Header::Type("x-bt/MAP-msg-listing".into())));
-        let params = hdrs.iter().find_map(|h| if let Header::AppParams(p) = h { Some(p.clone()) } else { None }).unwrap();
+        let params = hdrs
+            .iter()
+            .find_map(|h| {
+                if let Header::AppParams(p) = h {
+                    Some(p.clone())
+                } else {
+                    None
+                }
+            })
+            .unwrap();
         assert_eq!(&params[..4], &[0x01, 0x02, 0x00, 100]);
         assert!(params.windows(3).any(|w| w == [0x13, 0x01, 255]));
     }
@@ -203,11 +228,25 @@ mod tests {
         let mut map = MapClient::connect(FakePhone::new(replies)).unwrap();
         map.send_sms("+213 550 00 00 01", "salut").unwrap();
         let sent = map.close().unwrap().sent;
-        let put = sent.iter().find(|p| p[0] == OP_PUT_FINAL).expect("a final put");
+        let put = sent
+            .iter()
+            .find(|p| p[0] == OP_PUT_FINAL)
+            .expect("a final put");
         let hdrs = decode_headers(&put[3..]).unwrap();
         assert!(hdrs.contains(&Header::Type("x-bt/message".into())));
-        let body = hdrs.iter().find_map(|h| if let Header::EndOfBody(b) = h { Some(b.clone()) } else { None }).unwrap();
-        assert!(String::from_utf8(body).unwrap().contains("TEL:+213550000001"));
+        let body = hdrs
+            .iter()
+            .find_map(|h| {
+                if let Header::EndOfBody(b) = h {
+                    Some(b.clone())
+                } else {
+                    None
+                }
+            })
+            .unwrap();
+        assert!(String::from_utf8(body)
+            .unwrap()
+            .contains("TEL:+213550000001"));
     }
 
     #[test]

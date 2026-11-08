@@ -59,9 +59,19 @@ pub enum CallEvent {
     /// A call started ringing.
     Incoming { id: String, number: String },
     /// A call is new or changed state. `since_ms` is when it became active.
-    Changed { id: String, state: CallState, number: String, since_ms: Option<u64> },
+    Changed {
+        id: String,
+        state: CallState,
+        number: String,
+        since_ms: Option<u64>,
+    },
     /// A call is over.
-    Ended { id: String, number: String, direction: Direction, seconds: u64 },
+    Ended {
+        id: String,
+        number: String,
+        direction: Direction,
+        seconds: u64,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -112,7 +122,10 @@ impl CallTracker {
                 t.active_since = Some(now_ms);
             }
             if snap.state.is_ringing() && !prev.is_ringing() {
-                events.push(CallEvent::Incoming { id: snap.id.clone(), number: t.number.clone() });
+                events.push(CallEvent::Incoming {
+                    id: snap.id.clone(),
+                    number: t.number.clone(),
+                });
             }
             if is_new || prev != snap.state {
                 events.push(CallEvent::Changed {
@@ -141,7 +154,9 @@ impl CallTracker {
             if let Some(t) = self.calls.remove(&id) {
                 // Talk time ends when the call was last seen, not after the grace wait.
                 let last_seen = t.missing_since.unwrap_or(now_ms);
-                let seconds = t.active_since.map_or(0, |s| last_seen.saturating_sub(s) / 1000);
+                let seconds = t
+                    .active_since
+                    .map_or(0, |s| last_seen.saturating_sub(s) / 1000);
                 // Answered means it ever became active, however short the call.
                 let direction = if !t.was_incoming {
                     Direction::Outgoing
@@ -150,7 +165,12 @@ impl CallTracker {
                 } else {
                     Direction::Missed
                 };
-                events.push(CallEvent::Ended { id, number: t.number, direction, seconds });
+                events.push(CallEvent::Ended {
+                    id,
+                    number: t.number,
+                    direction,
+                    seconds,
+                });
             }
         }
         events
@@ -166,19 +186,42 @@ mod tests {
     use super::*;
 
     fn snap(id: &str, state: CallState, number: &str) -> CallSnapshot {
-        CallSnapshot { id: id.into(), state, number: number.into(), name: None }
+        CallSnapshot {
+            id: id.into(),
+            state,
+            number: number.into(),
+            name: None,
+        }
     }
 
     #[test]
     fn incoming_then_answered_then_ended() {
         let mut t = CallTracker::new();
         let ev = t.ingest(&[snap("c1", CallState::Incoming, "+1")], 0);
-        assert!(ev.contains(&CallEvent::Incoming { id: "c1".into(), number: "+1".into() }));
+        assert!(ev.contains(&CallEvent::Incoming {
+            id: "c1".into(),
+            number: "+1".into()
+        }));
         let ev = t.ingest(&[snap("c1", CallState::Active, "+1")], 5_000);
-        assert!(matches!(ev[0], CallEvent::Changed { state: CallState::Active, since_ms: Some(5_000), .. }));
+        assert!(matches!(
+            ev[0],
+            CallEvent::Changed {
+                state: CallState::Active,
+                since_ms: Some(5_000),
+                ..
+            }
+        ));
         assert!(t.ingest(&[], 65_000).is_empty()); // grace starts
         let ev = t.ingest(&[], 66_600);
-        assert_eq!(ev, vec![CallEvent::Ended { id: "c1".into(), number: "+1".into(), direction: Direction::Incoming, seconds: 60 }]);
+        assert_eq!(
+            ev,
+            vec![CallEvent::Ended {
+                id: "c1".into(),
+                number: "+1".into(),
+                direction: Direction::Incoming,
+                seconds: 60
+            }]
+        );
         assert!(t.is_idle());
     }
 
@@ -188,7 +231,14 @@ mod tests {
         t.ingest(&[snap("c1", CallState::Incoming, "+1")], 0);
         t.ingest(&[], 1_000);
         let ev = t.ingest(&[], 3_000);
-        assert!(matches!(&ev[0], CallEvent::Ended { direction: Direction::Missed, seconds: 0, .. }));
+        assert!(matches!(
+            &ev[0],
+            CallEvent::Ended {
+                direction: Direction::Missed,
+                seconds: 0,
+                ..
+            }
+        ));
     }
 
     #[test]
@@ -198,7 +248,14 @@ mod tests {
         t.ingest(&[snap("c1", CallState::Active, "+1")], 2_000);
         t.ingest(&[], 12_000);
         let ev = t.ingest(&[], 14_000);
-        assert!(matches!(&ev[0], CallEvent::Ended { direction: Direction::Outgoing, seconds: 10, .. }));
+        assert!(matches!(
+            &ev[0],
+            CallEvent::Ended {
+                direction: Direction::Outgoing,
+                seconds: 10,
+                ..
+            }
+        ));
     }
 
     #[test]
@@ -208,7 +265,14 @@ mod tests {
         t.ingest(&[snap("c1", CallState::Active, "+1")], 100);
         t.ingest(&[], 300);
         let ev = t.ingest(&[], 2_000);
-        assert!(matches!(&ev[0], CallEvent::Ended { direction: Direction::Incoming, seconds: 0, .. }));
+        assert!(matches!(
+            &ev[0],
+            CallEvent::Ended {
+                direction: Direction::Incoming,
+                seconds: 0,
+                ..
+            }
+        ));
     }
 
     #[test]
