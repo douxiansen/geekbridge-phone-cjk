@@ -37,7 +37,7 @@ pub fn phone_chip(phone: Option<&PhoneInfo>, messages: &LinkStatus) -> PhoneChip
         match messages {
             LinkStatus::Ready => (Dot::Green, "Connected"),
             LinkStatus::Idle | LinkStatus::Connecting => (Dot::Hollow, "Connecting…"),
-            LinkStatus::AccessDenied => (Dot::Red, "Allow access on phone"),
+            LinkStatus::AccessDenied => (Dot::Red, "Allow on phone"),
             LinkStatus::Failed(_) => (Dot::Red, "Messages offline"),
         }
     };

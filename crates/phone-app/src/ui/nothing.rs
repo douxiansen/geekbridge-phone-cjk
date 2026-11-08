@@ -68,6 +68,17 @@ pub fn fit_pitch(text: &str, max_pitch: f32, min_pitch: f32, max_width: f32) -> 
     (max_width / per_pitch).clamp(min_pitch, max_pitch)
 }
 
+/// How many characters fit `max_width` at `pitch` (the inverse of [`dot_size`]).
+pub fn chars_fitting(pitch: f32, max_width: f32) -> usize {
+    let per_char = (dotmatrix::COLS as f32 + 1.0) * pitch;
+    let usable = max_width - pitch * 0.8 + pitch;
+    if usable <= 0.0 {
+        0
+    } else {
+        (usable / per_char).floor() as usize
+    }
+}
+
 /// Like [`dot_text`], but picks the longest candidate that fits `max_width`.
 pub fn dot_text_fit(ui: &mut Ui, pal: &Palette, candidates: &[&str], pitch: f32, max_width: f32, color: Color32, grid: bool) {
     let p = scaled(ui, pitch);
@@ -85,6 +96,21 @@ mod tests {
         assert_eq!(spoken("..."), "loading");
         assert_eq!(spoken("-"), "-");
         assert_eq!(spoken("Missed call"), "Missed call");
+    }
+
+    #[test]
+    fn chars_fitting_agrees_with_dot_size() {
+        for pitch in [2.2_f32, 3.6, 5.0] {
+            for width in [120.0_f32, 260.0, 333.0] {
+                let n = chars_fitting(pitch, width);
+                let text = "8".repeat(n);
+                if n > 0 {
+                    assert!(dot_size(&text, pitch).x <= width + 0.01, "pitch {pitch} width {width} n {n}");
+                }
+                assert!(dot_size(&"8".repeat(n + 1), pitch).x > width, "one more must not fit");
+            }
+        }
+        assert_eq!(chars_fitting(5.0, 1.0), 0);
     }
 
     #[test]

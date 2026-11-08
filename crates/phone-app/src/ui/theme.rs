@@ -244,10 +244,11 @@ fn read_font(candidates: &[PathBuf]) -> Option<Vec<u8>> {
 }
 
 /// Fonts embedded in the binary (licences next to them in `assets/fonts`).
-const EMBEDDED_FONTS: [(&str, &[u8]); 3] = [
+const EMBEDDED_FONTS: [(&str, &[u8]); 4] = [
     ("noto-sans", include_bytes!("../../assets/fonts/NotoSans-Regular-subset.ttf")),
     ("noto-emoji", include_bytes!("../../assets/fonts/NotoEmoji-Regular.ttf")),
     ("hack", include_bytes!("../../assets/fonts/Hack-Regular.ttf")),
+    ("emoji-icon-font", include_bytes!("../../assets/fonts/emoji-icon-font.ttf")),
 ];
 
 fn embed_fonts(fonts: &mut FontDefinitions) {
@@ -255,9 +256,9 @@ fn embed_fonts(fonts: &mut FontDefinitions) {
         fonts.font_data.insert(name.into(), Arc::new(FontData::from_static(bytes)));
     }
     let proportional = fonts.families.entry(FontFamily::Proportional).or_default();
-    proportional.extend(["noto-sans", "noto-emoji"].map(String::from));
+    proportional.extend(["noto-sans", "noto-emoji", "emoji-icon-font"].map(String::from));
     let monospace = fonts.families.entry(FontFamily::Monospace).or_default();
-    monospace.extend(["hack", "noto-sans", "noto-emoji"].map(String::from));
+    monospace.extend(["hack", "noto-sans", "noto-emoji", "emoji-icon-font"].map(String::from));
 }
 
 /// Registers the embedded fonts behind the first system UI face that exists.
@@ -278,6 +279,22 @@ pub fn install_fonts(ctx: &egui::Context) {
         }
         fonts.families.entry(FontFamily::Proportional).or_default().insert(0, "system-regular".into());
         break;
+    }
+    // A fuller monochrome emoji face from the system, when there is one, ahead of the small
+    // embedded set (egui cannot draw colour emoji).
+    let emoji_paths = [
+        "/usr/share/fonts/google-noto-emoji-fonts/NotoEmoji-Regular.ttf",
+        "/usr/share/fonts/noto/NotoEmoji-Regular.ttf",
+        "/usr/share/fonts/truetype/noto/NotoEmoji-Regular.ttf",
+        "/usr/share/fonts/google-noto-emoji/NotoEmoji-Regular.ttf",
+    ];
+    if !bundled_only {
+        if let Some(bytes) = read_font(&paths(&emoji_paths)) {
+            fonts.font_data.insert("system-emoji".into(), Arc::new(FontData::from_owned(bytes)));
+            let family = fonts.families.entry(FontFamily::Proportional).or_default();
+            let at = family.iter().position(|n| n == "noto-emoji").unwrap_or(family.len());
+            family.insert(at, "system-emoji".into());
+        }
     }
     // Semibold falls back to the regular face when no bold exists.
     let mut semibold: Vec<String> = bold_name.into_iter().collect();
@@ -525,7 +542,7 @@ pub fn pill(ui: &mut Ui, pal: &Palette, text: &str, kind: ButtonKind, enabled: b
 }
 
 /// Round icon button used for Send, Call and similar single actions.
-pub fn round_button(ui: &mut Ui, pal: &Palette, diameter: f32, fill: Color32, icon: Icon, enabled: bool, label: &str) -> Response {
+pub fn round_button(ui: &mut Ui, pal: &Palette, diameter: f32, fill: Color32, fg: Color32, icon: Icon, enabled: bool, label: &str) -> Response {
     let sense = if enabled { Sense::click() } else { Sense::hover() };
     let (rect, response) = ui.allocate_exact_size(vec2(diameter, diameter), sense);
     let fill = if !enabled {
@@ -541,7 +558,7 @@ pub fn round_button(ui: &mut Ui, pal: &Palette, diameter: f32, fill: Color32, ic
     if response.has_focus() {
         focus_circle(ui, pal, rect.center(), diameter / 2.0);
     }
-    let tint = if enabled { Color32::WHITE } else { pal.text3 };
+    let tint = if enabled { fg } else { pal.text3 };
     let icon_rect = egui::Rect::from_center_size(rect.center(), vec2(diameter * 0.46, diameter * 0.46));
     if icon == Icon::Phone {
         icons::paint_handset(ui.painter(), rect.center(), diameter * 0.34, tint, 0.0);

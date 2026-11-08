@@ -16,6 +16,8 @@ pub enum Request {
     Show,
     /// Show the conversation with this number.
     Open(String),
+    /// Show the keypad with this number typed in.
+    Dial(String),
 }
 
 /// Protocol tag: lets a launch tell our socket from anything else that might sit on the path.
@@ -26,6 +28,7 @@ impl Request {
         match self {
             Request::Show => format!("{HELLO} show\n"),
             Request::Open(n) => format!("{HELLO} open {}\n", n.replace(['\n', '\r'], " ")),
+            Request::Dial(n) => format!("{HELLO} dial {}\n", n.replace(['\n', '\r'], " ")),
         }
     }
 
@@ -34,6 +37,7 @@ impl Request {
         match rest.split_once(' ') {
             None if rest == "show" => Some(Request::Show),
             Some(("open", n)) if !n.trim().is_empty() => Some(Request::Open(n.trim().to_string())),
+            Some(("dial", n)) if !n.trim().is_empty() => Some(Request::Dial(n.trim().to_string())),
             _ => None,
         }
     }
@@ -42,6 +46,7 @@ impl Request {
         match self {
             Request::Show => UiAction::Show,
             Request::Open(number) => UiAction::OpenConversation { number },
+            Request::Dial(number) => UiAction::PrefillDial { number },
         }
     }
 }
@@ -60,6 +65,16 @@ pub enum Role {
 pub struct Guard {
     #[cfg(unix)]
     inner: Option<unix::Bound>,
+    /// The socket file, removed when the first instance exits.
+    #[cfg(unix)]
+    path: PathBuf,
+}
+
+impl Drop for Guard {
+    fn drop(&mut self) {
+        #[cfg(unix)]
+        let _ = std::fs::remove_file(&self.path);
+    }
 }
 
 impl Guard {
@@ -110,15 +125,6 @@ mod unix {
 
     pub struct Bound {
         listener: UnixListener,
-        path: PathBuf,
-    }
-
-    /// Removes the socket file when the first instance exits.
-    struct Cleanup(PathBuf);
-    impl Drop for Cleanup {
-        fn drop(&mut self) {
-            let _ = std::fs::remove_file(&self.0);
-        }
     }
 
     fn socket_path(dir: &Path, name: &str) -> PathBuf {
@@ -153,7 +159,7 @@ mod unix {
                             // Keep the file private to this user.
                             use std::os::unix::fs::PermissionsExt;
                             let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
-                            return Role::Primary(Guard { inner: Some(Bound { listener, path }) });
+                            return Role::Primary(Guard { inner: Some(Bound { listener }), path });
                         }
                         // Another launch won the race: ask it instead.
                         Err(e) if e.kind() == std::io::ErrorKind::AddrInUse => continue,
@@ -167,9 +173,8 @@ mod unix {
     }
 
     pub fn serve(bound: Bound, actions: ActionSender) {
-        let Bound { listener, path } = bound;
+        let Bound { listener } = bound;
         let spawned = std::thread::Builder::new().name("gbp-instance".into()).spawn(move || {
-            let _cleanup = Cleanup(path);
             for stream in listener.incoming() {
                 let Ok(mut stream) = stream else { continue };
                 let _ = stream.set_read_timeout(Some(IO_TIMEOUT));
@@ -197,7 +202,7 @@ mod tests {
 
     #[test]
     fn requests_round_trip() {
-        for r in [Request::Show, Request::Open("+213 550 123 456".into())] {
+        for r in [Request::Show, Request::Open("+213 550 123 456".into()), Request::Dial("+1555".into())] {
             assert_eq!(Request::decode(&r.encode()), Some(r));
         }
     }

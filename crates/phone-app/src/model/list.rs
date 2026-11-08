@@ -44,6 +44,15 @@ impl Offsets {
         self.top(i + 1) - self.top(i)
     }
 
+    /// The one row containing the vertical position `y`, if any. Hover highlighting comes from
+    /// this, so at most one row can ever be highlighted.
+    pub fn row_at(&self, y: f32) -> Option<usize> {
+        if y < 0.0 || y >= self.total() || self.is_empty() {
+            return None;
+        }
+        Some(self.starts[1..].partition_point(|end| *end <= y).min(self.len() - 1))
+    }
+
     /// The rows that touch the vertical span `top..bottom`.
     pub fn visible(&self, top: f32, bottom: f32) -> Range<usize> {
         let n = self.len();
@@ -111,6 +120,26 @@ mod tests {
         // Scrolled past the end: nothing.
         assert_eq!(o.visible(500.0, 600.0), 10..10);
         assert_eq!(o.visible(0.0, 0.0), 0..0);
+    }
+
+    #[test]
+    fn a_position_belongs_to_exactly_one_row() {
+        let o = Offsets::new([10.0, 20.0, 30.0]);
+        assert_eq!(o.row_at(0.0), Some(0));
+        assert_eq!(o.row_at(9.99), Some(0));
+        // The boundary belongs to the lower row only.
+        assert_eq!(o.row_at(10.0), Some(1));
+        assert_eq!(o.row_at(59.9), Some(2));
+        assert_eq!(o.row_at(60.0), None);
+        assert_eq!(o.row_at(-1.0), None);
+        assert_eq!(Offsets::new([]).row_at(0.0), None);
+        // Every sampled position has at most one row, and it contains the position.
+        for i in 0..600 {
+            let y = i as f32 * 0.1;
+            if let Some(r) = o.row_at(y) {
+                assert!(o.top(r) <= y && y < o.top(r + 1));
+            }
+        }
     }
 
     #[test]

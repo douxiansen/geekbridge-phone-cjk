@@ -3,7 +3,7 @@
 
 /// Longest text the composer accepts, in characters.
 pub const LIMIT: usize = 1000;
-/// The counter is shown once this many characters are left or fewer.
+/// The counter is emphasised once this many characters are left or fewer.
 pub const COUNTER_FROM_LEFT: usize = 300;
 
 /// Where the composer stands for a draft.
@@ -19,8 +19,13 @@ impl Counter {
         Self { used, left: LIMIT.saturating_sub(used) }
     }
 
-    /// Whether to show the "used/limit" label at all.
+    /// Whether to show the "used/limit" label: whenever there is a draft.
     pub fn visible(&self) -> bool {
+        self.used > 0
+    }
+
+    /// Whether the label should stand out because the limit is close.
+    pub fn emphasised(&self) -> bool {
         self.left <= COUNTER_FROM_LEFT
     }
 
@@ -74,10 +79,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn counter_appears_near_the_limit() {
-        assert!(!Counter::of("hello").visible());
+    fn counter_shows_with_a_draft_and_stands_out_near_the_limit() {
+        assert!(!Counter::of("").visible());
+        assert!(Counter::of("hello").visible());
+        assert!(!Counter::of("hello").emphasised());
         let near = "x".repeat(LIMIT - COUNTER_FROM_LEFT);
-        assert!(Counter::of(&near).visible());
+        assert!(Counter::of(&near).emphasised());
         assert_eq!(Counter::of(&near).label(), format!("{}/1000", LIMIT - COUNTER_FROM_LEFT));
     }
 

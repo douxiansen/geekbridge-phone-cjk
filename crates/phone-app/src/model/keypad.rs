@@ -90,6 +90,32 @@ pub fn sanitise_paste(text: &str) -> String {
     out
 }
 
+/// The number in a `tel:` (or `callto:`) link: `tel:+1-555-010-0100;ext=5` is `+15550100100`.
+/// Percent escapes are decoded (`%2B` is `+`). `None` when the text is not such a link or has no
+/// dialable characters.
+pub fn parse_tel_uri(uri: &str) -> Option<String> {
+    let lower = uri.trim();
+    let rest = ["tel://", "tel:", "callto://", "callto:"].iter().find_map(|p| lower.get(..p.len()).filter(|h| h.eq_ignore_ascii_case(p)).map(|_| &lower[p.len()..]))?;
+    // Parameters after `;` (extension, context) and a query after `?` are not part of the number.
+    let number = rest.split([';', '?', '#']).next().unwrap_or("");
+    let mut decoded = String::new();
+    let mut chars = number.chars();
+    while let Some(c) = chars.next() {
+        if c == '%' {
+            let hex: String = chars.by_ref().take(2).collect();
+            match u8::from_str_radix(&hex, 16) {
+                Ok(b) => decoded.push(char::from(b)),
+                Err(_) => return None,
+            }
+        } else {
+            decoded.push(c);
+        }
+    }
+    let mut out = String::new();
+    push_str(&mut out, &decoded);
+    can_dial(&out).then_some(out)
+}
+
 /// What the readout shows: the whole number, or its tail with an ellipsis when it is longer than
 /// `max_chars`, so the digits being typed are always visible.
 pub fn readout(number: &str, max_chars: usize) -> String {
@@ -180,6 +206,25 @@ mod tests {
         assert_eq!(readout("1234567890", 6), "…67890");
         assert_eq!(readout("1234567890", 6).chars().count(), 6);
         assert_eq!(readout("123", 1), "123");
+    }
+
+    #[test]
+    fn tel_links_give_the_number() {
+        assert_eq!(parse_tel_uri("tel:+1-555-010-0100").as_deref(), Some("+15550100100"));
+        assert_eq!(parse_tel_uri("TEL:%2B44%2020%207946%200958").as_deref(), Some("+442079460958"));
+        assert_eq!(parse_tel_uri("tel://0612345678;ext=12").as_deref(), Some("0612345678"));
+        assert_eq!(parse_tel_uri("callto:112?x=1").as_deref(), Some("112"));
+        assert_eq!(parse_tel_uri("  tel:*21#  ").as_deref(), Some("*21#"));
+    }
+
+    #[test]
+    fn other_text_is_not_a_tel_link() {
+        assert_eq!(parse_tel_uri("https://example.com"), None);
+        assert_eq!(parse_tel_uri("tel:"), None);
+        assert_eq!(parse_tel_uri("tel:abc"), None);
+        assert_eq!(parse_tel_uri("tel:%zz1"), None);
+        assert_eq!(parse_tel_uri("telephone:123"), None);
+        assert_eq!(parse_tel_uri(""), None);
     }
 
     #[test]

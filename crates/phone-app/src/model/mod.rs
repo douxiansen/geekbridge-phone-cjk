@@ -9,4 +9,5 @@ pub mod keypad;
 pub mod list;
 pub mod status;
 pub mod tab;
+pub mod text;
 pub mod thread;

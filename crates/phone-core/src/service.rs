@@ -18,6 +18,7 @@ use phone_obex::{Book, MapClient, PbapClient};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -172,6 +173,8 @@ struct Inner {
     gate: Gate,
     cmd: Sender<Command>,
     next_token: Mutex<u64>,
+    /// Set by [`Handle::retry_messages`]: reconnect the message link now.
+    retry_messages: AtomicBool,
 }
 
 impl Inner {
@@ -247,6 +250,11 @@ impl Handle {
     pub fn audio_here(&self) {
         self.send(Command::AudioHere);
     }
+    /// Reconnects the message link now instead of waiting out the back-off (for a Retry button
+    /// after the user allowed access on the phone).
+    pub fn retry_messages(&self) {
+        self.inner.retry_messages.store(true, Ordering::Release);
+    }
     pub fn set_settings(&self, s: Settings) {
         self.send(Command::SetSettings(s));
     }
@@ -284,6 +292,7 @@ impl Service {
             },
             cmd: cmd_tx,
             next_token: Mutex::new(0),
+            retry_messages: AtomicBool::new(false),
         });
         let (msg_tx, msg_rx) = mpsc::channel::<(u64, String, String)>();
         let (contacts_tx, contacts_rx) = mpsc::channel::<()>();
@@ -581,6 +590,10 @@ fn messages_loop(inner: Arc<Inner>, rx: Receiver<(u64, String, String)>) {
             continue;
         };
 
+        if inner.retry_messages.swap(false, Ordering::AcqRel) {
+            next_attempt = Instant::now();
+            backoff = inner.opts.reconnect_min;
+        }
         if link.is_none() {
             if Instant::now() < next_attempt {
                 if inner.gate.sleep(Duration::from_millis(250)) {
