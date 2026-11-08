@@ -114,12 +114,13 @@ fn fast(dir: &str) -> Options {
     o.reconnect_min = Duration::from_millis(50);
     o.reconnect_max = Duration::from_millis(200);
     o.denied_retry = Duration::from_millis(100);
+    o.inbox_poll = Some(Duration::from_millis(100));
     o
 }
 
-/// Waits for an event matching `f`, up to 5 s.
+/// Waits for an event matching `f`, up to 15 s (CI runners can be slow).
 fn wait_for<T>(rx: &Receiver<Event>, mut f: impl FnMut(&Event) -> Option<T>) -> T {
-    let end = Instant::now() + Duration::from_secs(5);
+    let end = Instant::now() + Duration::from_secs(15);
     loop {
         let left = end.saturating_duration_since(Instant::now());
         match rx.recv_timeout(left) {
@@ -133,9 +134,9 @@ fn wait_for<T>(rx: &Receiver<Event>, mut f: impl FnMut(&Event) -> Option<T>) -> 
     }
 }
 
-/// Polls `f` until it is true, up to 5 s.
+/// Polls `f` until it is true, up to 15 s.
 fn eventually(mut f: impl FnMut() -> bool) {
-    let end = Instant::now() + Duration::from_secs(5);
+    let end = Instant::now() + Duration::from_secs(15);
     while !f() {
         assert!(Instant::now() < end, "condition never became true");
         std::thread::sleep(Duration::from_millis(20));

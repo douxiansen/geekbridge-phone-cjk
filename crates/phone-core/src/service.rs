@@ -127,6 +127,8 @@ pub struct Options {
     pub reconnect_max: Duration,
     /// How long to wait before retrying after the phone refused access.
     pub denied_retry: Duration,
+    /// Overrides the inbox check interval from the settings (for tests).
+    pub inbox_poll: Option<Duration>,
     /// Called after every event, from a worker thread (to wake a UI loop).
     pub wake: Option<Arc<dyn Fn() + Send + Sync>>,
 }
@@ -140,6 +142,7 @@ impl Options {
             reconnect_min: Duration::from_secs(2),
             reconnect_max: Duration::from_secs(60),
             denied_retry: Duration::from_secs(15),
+            inbox_poll: None,
             wake: None,
         }
     }
@@ -815,7 +818,9 @@ fn messages_loop(inner: Arc<Inner>, rx: Receiver<(u64, String, String)>) {
         }
 
         if Instant::now() >= next_poll {
-            let every = Duration::from_secs(u64::from(inner.settings().inbox_poll_secs));
+            let every = inner.opts.inbox_poll.unwrap_or_else(|| {
+                Duration::from_secs(u64::from(inner.settings().inbox_poll_secs))
+            });
             next_poll = Instant::now() + every;
             let Some(l) = link.as_mut() else { continue };
             let deep_now = std::mem::replace(&mut deep, false);

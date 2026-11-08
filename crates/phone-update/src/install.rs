@@ -104,11 +104,28 @@ fn write_executable(path: &Path, data: &[u8]) -> Result<(), UpdateError> {
 }
 
 /// The new program must run and answer `--version`.
+///
+/// Running a file that was just written can fail with "text file busy" (ETXTBSY): if another
+/// thread starts a subprocess while our write handle is open, the child briefly inherits that
+/// handle and `exec` of the file is refused until the child lets go. It passes within
+/// milliseconds, so the test is simply retried.
 fn smoke_test(path: &Path) -> Result<(), UpdateError> {
-    let out = std::process::Command::new(path)
-        .arg("--version")
-        .output()
-        .map_err(|e| UpdateError::Install(format!("the new version does not run: {e}")))?;
+    const TEXT_FILE_BUSY: i32 = 26;
+    let mut attempt = 0;
+    let out = loop {
+        match std::process::Command::new(path).arg("--version").output() {
+            Ok(out) => break out,
+            Err(e) if e.raw_os_error() == Some(TEXT_FILE_BUSY) && attempt < 40 => {
+                attempt += 1;
+                std::thread::sleep(std::time::Duration::from_millis(50));
+            }
+            Err(e) => {
+                return Err(UpdateError::Install(format!(
+                    "the new version does not run: {e}"
+                )))
+            }
+        }
+    };
     if !out.status.success() {
         return Err(UpdateError::Install(
             "the new version failed its self-test".into(),
