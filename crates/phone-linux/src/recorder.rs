@@ -19,42 +19,89 @@ use std::time::{Duration, Instant};
 const FIND_TIMEOUT: Duration = Duration::from_secs(12);
 const SAMPLE_RATE: &str = "16000";
 
-/// Picks the node that carries the other person's voice out of `pw-dump`
-/// output: an audio *source* belonging to the phone at `address`.
-pub fn find_remote_source(pw_dump_json: &str, address: &str) -> Option<String> {
+/// The PipeWire objects that belong to the phone at `address`: its device ids and nodes.
+struct PhoneObjects {
+    /// Node name, media class, and whether it is an audio source.
+    nodes: Vec<(String, String)>,
+    sources: Vec<(u8, String)>,
+}
+
+fn phone_objects(pw_dump_json: &str, address: &str) -> Option<PhoneObjects> {
     let value: serde_json::Value = serde_json::from_str(pw_dump_json).ok()?;
+    let objects = value.as_array()?;
     let mac_us = address.replace(':', "_").to_ascii_uppercase();
     let mac_colon = address.to_ascii_uppercase();
-    let mut best: Option<(u8, String)> = None;
-    for obj in value.as_array()? {
-        let props = &obj["info"]["props"];
-        let class = props["media.class"].as_str().unwrap_or("");
-        if class != "Audio/Source" {
+    let mentions = |p: &serde_json::Value, key: &str| {
+        p[key].as_str().is_some_and(|v| {
+            let v = v.to_ascii_uppercase();
+            v.contains(&mac_us) || v.contains(&mac_colon)
+        })
+    };
+    // The phone's device objects (its Bluetooth card), by id.
+    let device_ids: Vec<u64> = objects
+        .iter()
+        .filter(|o| o["type"].as_str().is_some_and(|t| t.ends_with("Device")))
+        .filter(|o| {
+            let p = &o["info"]["props"];
+            mentions(p, "device.name") || mentions(p, "api.bluez5.address")
+        })
+        .filter_map(|o| o["id"].as_u64())
+        .collect();
+    let mut nodes = Vec::new();
+    let mut sources = Vec::new();
+    for obj in objects {
+        if !obj["type"].as_str().is_some_and(|t| t.ends_with("Node")) {
             continue;
         }
+        let props = &obj["info"]["props"];
         let name = props["node.name"].as_str().unwrap_or("");
-        let belongs = name.to_ascii_uppercase().contains(&mac_us)
-            || props["api.bluez5.address"]
-                .as_str()
-                .is_some_and(|a| a.eq_ignore_ascii_case(&mac_colon))
-            || props["device.name"]
-                .as_str()
-                .is_some_and(|d| d.to_ascii_uppercase().contains(&mac_us));
+        let class = props["media.class"].as_str().unwrap_or("");
+        let linked_device = props["device.id"]
+            .as_u64()
+            .is_some_and(|d| device_ids.contains(&d));
+        let belongs = mentions(props, "node.name")
+            || mentions(props, "api.bluez5.address")
+            || mentions(props, "node.description")
+            || mentions(props, "device.name")
+            || linked_device;
         if !belongs || name.is_empty() {
             continue;
         }
-        // The call voice stream is `bluez_input...`; the music one is not a
-        // source in this direction. Prefer the explicit name.
-        let rank = if name.starts_with("bluez_input") {
-            0
-        } else {
-            1
-        };
-        if best.as_ref().is_none_or(|(r, _)| rank < *r) {
-            best = Some((rank, name.to_string()));
+        nodes.push((name.to_string(), class.to_string()));
+        // A source carries audio out of the phone: the other person's voice.
+        if class.starts_with("Audio/Source") {
+            let rank = if name.starts_with("bluez_input") {
+                0
+            } else {
+                1
+            };
+            sources.push((rank, name.to_string()));
         }
     }
-    best.map(|(_, n)| n)
+    Some(PhoneObjects { nodes, sources })
+}
+
+/// Picks the node that carries the other person's voice out of `pw-dump`
+/// output: an audio *source* belonging to the phone at `address`, found by
+/// its name, its Bluetooth address, or its link to the phone's device.
+pub fn find_remote_source(pw_dump_json: &str, address: &str) -> Option<String> {
+    let mut found = phone_objects(pw_dump_json, address)?.sources;
+    found.sort();
+    found.into_iter().next().map(|(_, name)| name)
+}
+
+/// What PipeWire shows for the phone, for the log when no voice stream is found.
+pub fn describe_phone_nodes(pw_dump_json: &str, address: &str) -> String {
+    match phone_objects(pw_dump_json, address) {
+        Some(p) if !p.nodes.is_empty() => p
+            .nodes
+            .iter()
+            .map(|(n, c)| format!("{n} [{c}]"))
+            .collect::<Vec<_>>()
+            .join(", "),
+        Some(_) => "no nodes belong to the phone".to_string(),
+        None => "pw-dump output could not be read".to_string(),
+    }
 }
 
 fn pw_dump() -> Option<String> {
@@ -147,7 +194,12 @@ impl LinuxRecorder {
                     }
                 }
                 if remote.is_none() {
-                    log::warn!("no voice stream for {address} appeared; nothing is recorded");
+                    let seen = pw_dump()
+                        .map(|j| describe_phone_nodes(&j, &address))
+                        .unwrap_or_else(|| "pw-dump is not available".to_string());
+                    log::warn!(
+                        "no voice stream for {address} appeared; nothing is recorded. PipeWire shows: {seen}"
+                    );
                 }
                 while !flag.load(Ordering::Relaxed) {
                     thread::sleep(Duration::from_millis(100));
@@ -225,10 +277,42 @@ mod tests {
     }
 
     #[test]
+    fn finds_a_source_linked_by_device_id_when_the_name_has_no_address() {
+        let dump = r#"[
+          {"id": 50, "type": "PipeWire:Interface:Device", "info": {"props": {"device.name": "bluez_card.AA_BB_CC_DD_EE_FF"}}},
+          {"id": 80, "type": "PipeWire:Interface:Node", "info": {"props": {"media.class": "Audio/Source", "node.name": "headset_voice.0", "device.id": 50}}},
+          {"id": 81, "type": "PipeWire:Interface:Node", "info": {"props": {"media.class": "Audio/Source", "node.name": "alsa_input.pci", "device.id": 7}}}
+        ]"#;
+        assert_eq!(
+            find_remote_source(dump, "AA:BB:CC:DD:EE:FF").as_deref(),
+            Some("headset_voice.0")
+        );
+    }
+
+    #[test]
+    fn describes_what_pipewire_shows_for_the_log() {
+        let text = describe_phone_nodes(DUMP, "AA:BB:CC:DD:EE:FF");
+        assert!(
+            text.contains("bluez_input.AA_BB_CC_DD_EE_FF.0 [Audio/Source]"),
+            "{text}"
+        );
+        assert!(text.contains("bluez_output"), "{text}");
+        assert!(!text.contains("alsa"), "{text}");
+        assert_eq!(
+            describe_phone_nodes("[]", "AA:BB:CC:DD:EE:FF"),
+            "no nodes belong to the phone"
+        );
+        assert_eq!(
+            describe_phone_nodes("x", "AA:BB:CC:DD:EE:FF"),
+            "pw-dump output could not be read"
+        );
+    }
+
+    #[test]
     fn prefers_the_bluez_input_name() {
         let dump = r#"[
-          {"info": {"props": {"media.class": "Audio/Source", "node.name": "other.AA_BB_CC_DD_EE_FF.monitor"}}},
-          {"info": {"props": {"media.class": "Audio/Source", "node.name": "bluez_input.AA_BB_CC_DD_EE_FF.0"}}}
+          {"type": "PipeWire:Interface:Node", "info": {"props": {"media.class": "Audio/Source", "node.name": "other.AA_BB_CC_DD_EE_FF.monitor"}}},
+          {"type": "PipeWire:Interface:Node", "info": {"props": {"media.class": "Audio/Source", "node.name": "bluez_input.AA_BB_CC_DD_EE_FF.0"}}}
         ]"#;
         assert_eq!(
             find_remote_source(dump, "AA:BB:CC:DD:EE:FF").as_deref(),
