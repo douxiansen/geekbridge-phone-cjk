@@ -155,7 +155,7 @@ mod tests {
     fn address_is_reversed_for_the_kernel() {
         assert_eq!(
             parse_address("AA:BB:CC:DD:EE:FF"),
-            Some([0xDA, 0x46, 0x5C, 0xC2, 0xAC, 0x6C])
+            Some([0xFF, 0xEE, 0xDD, 0xCC, 0xBB, 0xAA])
         );
         assert_eq!(parse_address("nope"), None);
         assert_eq!(parse_address("AA:BB:CC:DD:EE"), None);
