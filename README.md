@@ -8,6 +8,17 @@ An incoming call or text appears in the top-right corner of your screen like a m
 
 It speaks only standard Bluetooth profiles that every Android phone already has (Hands-Free for calls, Message Access for texts, Phone Book Access for contacts). Nothing is installed on the phone and nothing leaves your Bluetooth link.
 
+<p align="center">
+  <img src="docs/img/app-messages-dark.png" width="420" alt="Messages, dark: conversations and an iMessage-style thread">
+  <img src="docs/img/app-keypad-light.png" width="420" alt="Keypad, light: dot-matrix number readout">
+</p>
+<p align="center">
+  <img src="docs/img/overlay-stack-dark.png" width="360" alt="Top-right banners: a text with quick reply and a call in progress">
+  <img src="docs/img/overlay-call-light.png" width="360" alt="Incoming call banner with Decline and Answer, light">
+</p>
+
+<sub>Screenshots use a demo phone with invented people (`geekbridge-phone --demo`).</sub>
+
 > **Status: 0.1.0, Linux.** Verified on a Samsung Galaxy Z Fold5 (Android 17). Windows and macOS are planned: the protocol and core crates already have no OS dependencies, and [docs/PORTING.md](docs/PORTING.md) lists exactly what a new platform has to provide.
 
 ## What it does
