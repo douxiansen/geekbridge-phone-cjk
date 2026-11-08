@@ -5,6 +5,7 @@
 pub mod avatar;
 pub mod compose;
 pub mod format;
+pub mod guide;
 pub mod keypad;
 pub mod list;
 pub mod status;

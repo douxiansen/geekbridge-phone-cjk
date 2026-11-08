@@ -4,6 +4,7 @@
 
 pub mod call_card;
 pub mod contacts;
+pub mod guide;
 pub mod keypad;
 pub mod messages;
 pub mod recents;
@@ -24,6 +25,8 @@ pub enum Cmd {
     NewMessage { to: Option<String> },
     /// Open the conversation with a number.
     OpenConversation(String),
+    /// Open the iPhone setup guide, whether or not it was dismissed.
+    OpenGuide,
     /// Quit the whole app.
     Quit,
 }

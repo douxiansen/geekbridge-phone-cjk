@@ -47,6 +47,10 @@ pub struct Live {
     pub settings: Settings,
     pub contact_count: usize,
     pub recent_count: usize,
+    /// How the phone's Bluetooth list names this computer (what an iPhone shows).
+    pub computer_name: Option<String>,
+    /// The phone's hands-free link is up, so calls work.
+    pub calls_ready: bool,
 }
 
 impl Live {
@@ -70,6 +74,8 @@ impl Live {
             settings: st.settings.clone(),
             contact_count: st.contacts.len(),
             recent_count: st.recents.len(),
+            computer_name: st.computer_name.clone(),
+            calls_ready: st.calls_ready,
         }
     }
 

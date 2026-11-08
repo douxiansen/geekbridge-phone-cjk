@@ -7,6 +7,7 @@ use crate::model::tab::Tab;
 use phone_core::conversations::Conversation;
 use phone_core::store;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -16,6 +17,8 @@ pub struct UiState {
     pub tab: Tab,
     /// For each conversation key, the time of the newest message that has been seen.
     pub read_until: HashMap<String, i64>,
+    /// Phones (by Bluetooth address) whose iPhone setup guide the user asked not to see again.
+    pub guide_dismissed: BTreeSet<String>,
 }
 
 impl UiState {
@@ -28,6 +31,11 @@ impl UiState {
         } else {
             false
         }
+    }
+
+    /// Remembers that the setup guide is not wanted for `address`. True when that is new.
+    pub fn dismiss_guide(&mut self, address: &str) -> bool {
+        self.guide_dismissed.insert(address.to_string())
     }
 
     /// Texts in `conv` that came in, are unread on the phone, and have not been seen here.
@@ -123,6 +131,34 @@ mod tests {
         let c = conv(vec![m(90, true, false), m(110, true, false)]);
         assert_eq!(st.unread_in(&c), 1);
         assert_eq!(st.unread_total(&[c.clone(), c]), 2);
+    }
+
+    #[test]
+    fn a_dismissed_guide_is_remembered_per_phone_across_restarts() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = UiStore::new(dir.path());
+        let mut st = store.load();
+        assert!(st.guide_dismissed.is_empty());
+        assert!(st.dismiss_guide("AA:BB"));
+        assert!(!st.dismiss_guide("AA:BB"), "second time changes nothing");
+        store.save(&st);
+        let again = store.load();
+        assert!(again.guide_dismissed.contains("AA:BB"));
+        assert!(!again.guide_dismissed.contains("CC:DD"));
+    }
+
+    #[test]
+    fn an_old_file_without_the_guide_list_still_loads() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("ui.json"),
+            br#"{"tab":"contacts","read_until":{"k":5}}"#,
+        )
+        .unwrap();
+        let st = UiStore::new(dir.path()).load();
+        assert_eq!(st.tab, Tab::Contacts);
+        assert_eq!(st.read_until["k"], 5);
+        assert!(st.guide_dismissed.is_empty());
     }
 
     #[test]

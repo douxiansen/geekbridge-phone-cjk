@@ -31,6 +31,8 @@ pub enum Scene {
     Offline,
     /// A running call, drawn as if it were being recorded (the fake phone cannot record).
     Recording,
+    /// A fake iPhone that is paired but not set up: texts, contacts and calls come on step by step.
+    IphoneSetup,
 }
 
 impl Scene {
@@ -44,6 +46,7 @@ impl Scene {
             "denied" => Scene::Denied,
             "offline" => Scene::Offline,
             "recording" => Scene::Recording,
+            "iphone-setup" => Scene::IphoneSetup,
             _ => return None,
         })
     }
@@ -53,11 +56,42 @@ impl Scene {
 #[derive(Clone)]
 pub struct DemoControl {
     platform: Arc<DemoPlatform>,
+    iphone: bool,
 }
 
 impl DemoControl {
     pub fn new(platform: Arc<DemoPlatform>) -> Self {
-        Self { platform }
+        Self {
+            platform,
+            iphone: false,
+        }
+    }
+
+    /// For a fake iPhone, which has the setup steps to play.
+    pub fn new_iphone(platform: Arc<DemoPlatform>) -> Self {
+        Self {
+            platform,
+            iphone: true,
+        }
+    }
+
+    pub fn is_iphone(&self) -> bool {
+        self.iphone
+    }
+
+    /// The user turned on Show Notifications on the iPhone.
+    pub fn allow_messages(&self) {
+        self.platform.allow_messages();
+    }
+
+    /// The user turned on Sync Contacts on the iPhone.
+    pub fn share_contacts(&self) {
+        self.platform.share_contacts();
+    }
+
+    /// The iPhone opened its hands-free link (a call came in, or it was picked as audio route).
+    pub fn connect_hands_free(&self) {
+        self.platform.connect_hands_free();
     }
 
     pub fn ring(&self, number: &str) {
@@ -159,7 +193,7 @@ impl DemoControl {
                     Scene::Text => {
                         control.text(KNOWN_NUMBER, "Table is ready, come whenever you like")
                     }
-                    Scene::Denied | Scene::Offline => {}
+                    Scene::Denied | Scene::Offline | Scene::IphoneSetup => {}
                 }
             });
         if let Err(e) = spawned {
@@ -201,6 +235,7 @@ mod tests {
         assert_eq!(Scene::parse("ring"), Some(Scene::Ring));
         assert_eq!(Scene::parse(" Active "), Some(Scene::Active));
         assert_eq!(Scene::parse("ring-unknown"), Some(Scene::RingUnknown));
+        assert_eq!(Scene::parse("iphone-setup"), Some(Scene::IphoneSetup));
         assert_eq!(Scene::parse("nope"), None);
     }
 

@@ -132,8 +132,17 @@ pub fn run(opts: RunOptions) -> Result<(), String> {
         std::sync::Arc<dyn phone_core::platform::Platform>,
         Option<demo::DemoControl>,
     ) = if opts.demo {
-        let p = phone_core::demo::DemoPlatform::new();
-        let control = demo::DemoControl::new(p.clone());
+        let iphone = opts.scene == Some(demo::Scene::IphoneSetup);
+        let p = if iphone {
+            phone_core::demo::DemoPlatform::new_iphone()
+        } else {
+            phone_core::demo::DemoPlatform::new()
+        };
+        let control = if iphone {
+            demo::DemoControl::new_iphone(p.clone())
+        } else {
+            demo::DemoControl::new(p.clone())
+        };
         if let Some(scene) = opts.scene {
             control.prepare(scene);
         }

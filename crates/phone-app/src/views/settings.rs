@@ -258,7 +258,7 @@ impl SettingsState {
         });
     }
 
-    fn phones(&mut self, ui: &mut Ui, cx: &Cx, s: &mut Settings) {
+    fn phones(&mut self, ui: &mut Ui, cx: &mut Cx, s: &mut Settings) {
         let pal = cx.pal;
         theme::section(ui, &pal, "Phone");
         theme::card(ui, &pal, |ui| {
@@ -301,6 +301,30 @@ impl SettingsState {
                 if widgets::radio_row(ui, &pal, selected, &p.name, &sub).clicked() {
                     s.preferred_phone = Some(p.address.clone());
                 }
+            }
+            if cx.live.phones.iter().any(|p| p.apple) {
+                widgets::card_divider(ui, &pal);
+                widgets::setting_row(
+                    ui,
+                    &pal,
+                    "iPhone setup guide",
+                    "The steps that make an iPhone share texts, contacts and calls.",
+                    |ui| {
+                        if theme::pill(
+                            ui,
+                            &pal,
+                            "Open guide",
+                            ButtonKind::Plain,
+                            true,
+                            PillSize::Regular,
+                            0.0,
+                        )
+                        .clicked()
+                        {
+                            cx.cmds.push(Cmd::OpenGuide);
+                        }
+                    },
+                );
             }
         });
     }

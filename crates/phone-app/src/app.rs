@@ -16,6 +16,7 @@ use crate::shared::Shared;
 use crate::state::{UiState, UiStore};
 use crate::ui::theme;
 use crate::updater::Updater;
+use crate::views::guide::GuideState;
 use crate::views::{
     call_card, contacts::ContactsState, keypad::KeypadState, messages::MessagesState,
     recents::RecentsState, settings::SettingsState, Cmd, Cx,
@@ -82,6 +83,7 @@ pub struct App {
     messages: MessagesState,
     settings: SettingsState,
     notices: Notices,
+    guide: GuideState,
     updater: Updater,
     quitting: bool,
     pending_minimise: bool,
@@ -92,6 +94,8 @@ pub struct App {
     /// Demo: draw calls as being recorded.
     #[cfg(feature = "demo")]
     demo_fake_recording: bool,
+    #[cfg(feature = "demo")]
+    demo_scene: Option<crate::demo::Scene>,
     /// Demo screenshots: moves through the screens by itself.
     #[cfg(feature = "demo")]
     tour: Option<(Instant, usize)>,
@@ -189,6 +193,7 @@ impl App {
             messages: MessagesState::default(),
             settings: SettingsState::default(),
             notices: Notices::default(),
+            guide: GuideState::default(),
             updater,
             quitting: false,
             pending_minimise: boot.start_minimised,
@@ -196,6 +201,8 @@ impl App {
             applied_theme: None,
             #[cfg(feature = "demo")]
             demo_fake_recording: boot.demo_scene == Some(crate::demo::Scene::Recording),
+            #[cfg(feature = "demo")]
+            demo_scene: boot.demo_scene,
             #[cfg(feature = "demo")]
             demo: boot.demo,
             #[cfg(feature = "demo")]
@@ -293,6 +300,48 @@ impl App {
         }
     }
 
+    /// The tour for the iPhone setup guide: each step of the setup comes true in turn.
+    #[cfg(feature = "demo")]
+    fn guide_tour_step(&mut self, ctx: &egui::Context, since: Instant, step: usize) {
+        let Some(demo) = self.demo.clone() else {
+            self.tour = None;
+            return;
+        };
+        match step {
+            // Nothing done: the iPhone is away.
+            0 => {
+                demo.set_connected(false);
+                self.guide.open_manually();
+            }
+            // Paired only.
+            1 => demo.set_connected(true),
+            // Show Notifications turned on.
+            2 => {
+                demo.allow_messages();
+                // What "Check again" does; the service would otherwise retry in its own time.
+                self.handle.retry_messages();
+            }
+            // Sync Contacts turned on, and Check again pressed.
+            3 => {
+                demo.share_contacts();
+                self.handle.send(Command::ReloadContacts);
+            }
+            // The iPhone opens its hands-free link.
+            4 => demo.connect_hands_free(),
+            // Then the guide goes away and Settings offers it again.
+            5 => {
+                self.guide.close();
+                self.goto(Tab::Settings);
+            }
+            _ => {
+                self.tour = None;
+                return;
+            }
+        }
+        self.tour = Some((since, step + 1));
+        ctx.request_repaint_after(Duration::from_millis(300));
+    }
+
     /// Steps the screenshot tour: every few seconds, the next screen.
     #[cfg(feature = "demo")]
     fn tour_step(&mut self, ctx: &egui::Context) {
@@ -306,6 +355,10 @@ impl App {
         // The first step waits for the demo phone's data to arrive.
         if since.elapsed() < Duration::from_secs(secs * (step as u64 + 1)) {
             ctx.request_repaint_after(Duration::from_millis(300));
+            return;
+        }
+        if self.demo_scene == Some(crate::demo::Scene::IphoneSetup) {
+            self.guide_tour_step(ctx, since, step);
             return;
         }
         let known = crate::demo::KNOWN_NUMBER;
@@ -385,6 +438,27 @@ impl App {
                             demo.miss(KNOWN_NUMBER);
                             ui.close_menu();
                         }
+                        if ui.button("iPhone setup guide").clicked() {
+                            self.guide.open_manually();
+                            ui.close_menu();
+                        }
+                        if demo.is_iphone() {
+                            if ui.button("Simulate: Show Notifications on").clicked() {
+                                demo.allow_messages();
+                                self.handle.retry_messages();
+                                ui.close_menu();
+                            }
+                            if ui.button("Simulate: Sync Contacts on").clicked() {
+                                demo.share_contacts();
+                                self.handle.send(Command::ReloadContacts);
+                                ui.close_menu();
+                            }
+                            if ui.button("Simulate: first call / hands-free up").clicked() {
+                                demo.connect_hands_free();
+                                ui.close_menu();
+                            }
+                        }
+                        ui.separator();
                         let label = if demo.is_connected() {
                             "Disconnect the phone"
                         } else {
@@ -542,7 +616,28 @@ impl eframe::App for App {
                     self.goto(Tab::Messages);
                     self.messages.open_conversation(&number);
                 }
+                Cmd::OpenGuide => self.guide.open_manually(),
                 Cmd::Quit => self.quit(ctx),
+            }
+        }
+
+        // The iPhone setup guide: opens by itself for a phone that needs it, draws over everything.
+        {
+            let mut none: Vec<Cmd> = Vec::new();
+            let cx = Cx {
+                pal,
+                handle: &self.handle,
+                data: &self.data,
+                live: &live,
+                now,
+                off,
+                cmds: &mut none,
+                updater: &self.updater,
+            };
+            self.guide.auto_open(&cx, &self.ui_state.guide_dismissed);
+            let out = self.guide.show(ctx, &cx);
+            if let Some(address) = out.dismiss {
+                self.ui_state.dismiss_guide(&address);
             }
         }
 
