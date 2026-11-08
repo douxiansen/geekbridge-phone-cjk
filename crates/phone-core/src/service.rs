@@ -12,6 +12,7 @@ use crate::conversations::{parse_map_time, Conversations, InboxWatcher, Message}
 use crate::db::Db;
 use crate::platform::{PhoneInfo, Platform};
 use crate::recents::{Kind, Recent, Recents};
+use crate::recording::{self, Recorder};
 use crate::settings::Settings;
 use crate::store::{self, Paths};
 use crate::vcard;
@@ -44,6 +45,8 @@ pub struct ActiveCall {
     pub name: Option<String>,
     /// When it became active, for the timer.
     pub since: Option<Instant>,
+    /// The call is being recorded.
+    pub recording: bool,
 }
 
 /// Everything the UI reads. Lock it briefly and copy what you need.
@@ -84,6 +87,11 @@ pub enum Event {
         token: u64,
         number: String,
         result: Result<(), String>,
+    },
+    /// A recorded call was saved.
+    RecordingSaved {
+        path: std::path::PathBuf,
+        number: String,
     },
     /// Something the user should know, in a sentence.
     Notice(String),
@@ -437,6 +445,7 @@ fn calls_loop(inner: Arc<Inner>) {
     let mut tracker = CallTracker::new();
     let mut shown: Vec<ActiveCall> = Vec::new();
     let mut warned = false;
+    let mut recorders: HashMap<String, (Box<dyn Recorder>, PathBuf)> = HashMap::new();
     loop {
         if let Some(phone) = inner.selected_connected() {
             match inner.platform.calls(&phone.address) {
@@ -455,8 +464,27 @@ fn calls_loop(inner: Arc<Inner>) {
                             since.insert(id.clone(), *ms);
                         }
                     }
-                    let next = build_calls(&inner, &snaps, &shown, &since, started);
+                    for e in &events {
+                        if let CallEvent::Changed {
+                            id,
+                            state: CallState::Active,
+                            ..
+                        } = e
+                        {
+                            start_recording(&inner, &phone.address, id, &mut recorders);
+                        }
+                    }
+                    let next = build_calls(&inner, &snaps, &shown, &since, started, &recorders);
                     for e in events {
+                        if let CallEvent::Ended {
+                            id,
+                            number,
+                            direction,
+                            ..
+                        } = &e
+                        {
+                            finish_recording(&inner, id, number, direction, &mut recorders);
+                        }
                         if let CallEvent::Ended {
                             number,
                             direction,
@@ -506,12 +534,90 @@ fn calls_loop(inner: Arc<Inner>) {
     }
 }
 
+/// Starts recording a call that just became active, when the user wants that.
+fn start_recording(
+    inner: &Inner,
+    address: &str,
+    id: &str,
+    recorders: &mut HashMap<String, (Box<dyn Recorder>, PathBuf)>,
+) {
+    if recorders.contains_key(id) || !inner.settings().record_calls {
+        return;
+    }
+    let tmp = inner
+        .opts
+        .paths
+        .data
+        .join("recording-tmp")
+        .join(id.replace(['/', ':'], "_"));
+    if let Err(e) = std::fs::create_dir_all(&tmp) {
+        inner.notice(format!("Cannot record the call: {e}"));
+        return;
+    }
+    match inner.platform.start_recording(address, &tmp) {
+        Ok(r) => {
+            recorders.insert(id.to_string(), (r, tmp));
+        }
+        Err(e) => {
+            inner.notice(format!("Cannot record the call: {e}"));
+            let _ = std::fs::remove_dir_all(&tmp);
+        }
+    }
+}
+
+/// Stops a call's recording and saves it as one file.
+fn finish_recording(
+    inner: &Inner,
+    id: &str,
+    number: &str,
+    direction: &crate::calls::Direction,
+    recorders: &mut HashMap<String, (Box<dyn Recorder>, PathBuf)>,
+) {
+    let Some((recorder, tmp)) = recorders.remove(id) else {
+        return;
+    };
+    let result = recorder.finish().and_then(|audio| {
+        let (who, dir) = {
+            let st = lock(&inner.state);
+            let dir = st
+                .settings
+                .recordings_dir
+                .as_deref()
+                .filter(|d| !d.trim().is_empty())
+                .map_or_else(recording::default_dir, PathBuf::from);
+            (st.contacts.display(number), dir)
+        };
+        let kind = match direction {
+            crate::calls::Direction::Incoming => "incoming",
+            crate::calls::Direction::Outgoing => "outgoing",
+            crate::calls::Direction::Missed => "missed",
+        };
+        let stem = recording::file_stem(&who, kind, unix_now());
+        let mut out = dir.join(format!("{stem}.wav"));
+        let mut n = 2;
+        while out.exists() {
+            out = dir.join(format!("{stem} {n}.wav"));
+            n += 1;
+        }
+        recording::mix_stereo(&audio, &out).map(|()| out)
+    });
+    let _ = std::fs::remove_dir_all(&tmp);
+    match result {
+        Ok(path) => inner.emit(Event::RecordingSaved {
+            path,
+            number: number.to_string(),
+        }),
+        Err(e) => inner.notice(format!("The call recording could not be saved: {e}")),
+    }
+}
+
 fn build_calls(
     inner: &Inner,
     snaps: &[CallSnapshot],
     previous: &[ActiveCall],
     since: &HashMap<String, u64>,
     started: Instant,
+    recorders: &HashMap<String, (Box<dyn Recorder>, PathBuf)>,
 ) -> Vec<ActiveCall> {
     let st = lock(&inner.state);
     snaps
@@ -530,6 +636,7 @@ fn build_calls(
                     .clone()
                     .or_else(|| st.contacts.name_for(&s.number).map(str::to_string)),
                 since: kept.or(from_event),
+                recording: recorders.contains_key(&s.id),
             }
         })
         .collect()

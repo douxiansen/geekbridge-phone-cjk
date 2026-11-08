@@ -10,6 +10,7 @@ pub mod db;
 pub mod demo;
 pub mod platform;
 pub mod recents;
+pub mod recording;
 pub mod service;
 pub mod settings;
 pub mod store;

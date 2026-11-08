@@ -3,6 +3,7 @@
 
 use phone_core::calls::{CallEvent, CallSnapshot, CallState, Direction};
 use phone_core::platform::{PhoneInfo, Platform, PlatformError, Result, Stream};
+use phone_core::recording::{RecordedAudio, Recorder, RecordingError};
 use phone_core::service::{Event, LinkStatus, Options, Service};
 use phone_core::store::Paths;
 use phone_obex::fake::{FakeMessage, FakePhoneServer};
@@ -63,6 +64,40 @@ impl Platform for FakePlatform {
     }
     fn send_tones(&self, _: &str, _: &str) -> Result<()> {
         Ok(())
+    }
+    fn start_recording(&self, _: &str, dir: &std::path::Path) -> Result<Box<dyn Recorder>> {
+        Ok(Box::new(FakeRecorder {
+            dir: dir.to_path_buf(),
+        }))
+    }
+}
+
+struct FakeRecorder {
+    dir: std::path::PathBuf,
+}
+
+impl Recorder for FakeRecorder {
+    fn finish(self: Box<Self>) -> std::result::Result<RecordedAudio, RecordingError> {
+        let spec = hound::WavSpec {
+            channels: 1,
+            sample_rate: 16000,
+            bits_per_sample: 16,
+            sample_format: hound::SampleFormat::Int,
+        };
+        let mut paths = Vec::new();
+        for name in ["remote.wav", "local.wav"] {
+            let p = self.dir.join(name);
+            let mut w = hound::WavWriter::create(&p, spec)?;
+            for i in 0..8000 {
+                w.write_sample(((i % 100) * 100) as i16)?;
+            }
+            w.finalize()?;
+            paths.push(p);
+        }
+        Ok(RecordedAudio {
+            remote: Some(paths[0].clone()),
+            local: Some(paths[1].clone()),
+        })
     }
 }
 
@@ -329,5 +364,78 @@ fn cache_makes_the_second_start_instant_and_skips_a_fresh_contacts_fetch() {
     std::thread::sleep(Duration::from_millis(1500));
     // Still there: the empty fake phone did not overwrite the cache.
     assert_eq!(h.state().contacts.len(), 1);
+    svc.stop();
+}
+
+#[test]
+fn records_an_answered_call_when_enabled_and_saves_one_stereo_file() {
+    let p = FakePlatform::new();
+    let mut opts = fast("rec");
+    let out_dir = opts.paths.data.join("my recordings");
+    opts.paths = opts.paths.clone();
+    let (svc, rx) = Service::start(p.clone(), opts);
+    let h = svc.handle();
+    wait_for(&rx, |e| matches!(e, Event::Phone(Some(_))).then_some(()));
+    let mut settings = h.state().settings.clone();
+    settings.record_calls = true;
+    settings.recordings_dir = Some(out_dir.to_string_lossy().into_owned());
+    h.set_settings(settings);
+    eventually(|| h.state().settings.record_calls);
+
+    let call = |state| {
+        vec![CallSnapshot {
+            id: "/c1".into(),
+            state,
+            number: "+213550123456".into(),
+            name: None,
+        }]
+    };
+    *p.calls.lock().unwrap() = call(CallState::Incoming);
+    wait_for(&rx, |e| {
+        matches!(e, Event::Call(CallEvent::Incoming { .. })).then_some(())
+    });
+    *p.calls.lock().unwrap() = call(CallState::Active);
+    eventually(|| h.state().calls.first().is_some_and(|c| c.recording));
+    p.calls.lock().unwrap().clear();
+    let path = wait_for(&rx, |e| {
+        if let Event::RecordingSaved { path, .. } = e {
+            Some(path.clone())
+        } else {
+            None
+        }
+    });
+    assert!(path.starts_with(&out_dir), "{path:?}");
+    assert!(path.to_string_lossy().contains("(incoming)"));
+    let r = hound::WavReader::open(&path).unwrap();
+    assert_eq!(r.spec().channels, 2);
+    assert_eq!(r.duration(), 8000);
+    svc.stop();
+}
+
+#[test]
+fn nothing_is_recorded_unless_the_setting_is_on() {
+    let p = FakePlatform::new();
+    let (svc, rx) = Service::start(p.clone(), fast("norec"));
+    let h = svc.handle();
+    wait_for(&rx, |e| matches!(e, Event::Phone(Some(_))).then_some(()));
+    let call = |state| {
+        vec![CallSnapshot {
+            id: "/c1".into(),
+            state,
+            number: "+1".into(),
+            name: None,
+        }]
+    };
+    *p.calls.lock().unwrap() = call(CallState::Active);
+    eventually(|| h.state().calls.len() == 1);
+    assert!(!h.state().calls[0].recording);
+    p.calls.lock().unwrap().clear();
+    wait_for(&rx, |e| {
+        matches!(e, Event::Call(CallEvent::Ended { .. })).then_some(())
+    });
+    std::thread::sleep(Duration::from_millis(300));
+    while let Ok(e) = rx.try_recv() {
+        assert!(!matches!(e, Event::RecordingSaved { .. }));
+    }
     svc.stop();
 }
