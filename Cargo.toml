@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/phone-obex", "crates/phone-linux", "crates/phone-core", "crates/phone-overlay", "crates/phone-app"]
+members = ["crates/phone-obex", "crates/phone-linux", "crates/phone-core", "crates/phone-overlay", "crates/phone-update", "crates/phone-app"]
 
 [workspace.package]
 version = "0.1.0"

@@ -51,6 +51,10 @@ Call recording: when enabled, the calls thread starts a `Recorder` (platform-pro
 
 Everything OS-specific is `phone_core::platform::Platform`: list phones, open the MAP and PBAP streams, and control calls. `phone-linux` implements it with BlueZ and PipeWire's telephony service over D-Bus plus raw RFCOMM sockets. See [docs/PORTING.md](docs/PORTING.md).
 
+## Updates
+
+`phone-update` checks `releases/latest` of this repository, picks the asset for the running platform (`geekbridge-phone-<version>-<os>-<arch>.tar.gz`), downloads it, verifies the SHA-256 against `SHA256SUMS` and an Ed25519 signature of that digest against the compiled-in public key, then writes the new program next to the running one, smoke-tests it (`--version`) and swaps it in with an atomic rename (keeping `geekbridge-phone.previous`). Downloads are restricted to https GitHub hosts. The release workflow signs with the repository secret `UPDATE_SIGNING_KEY`. The `phone-app` updater thread owns scheduling and restarts the app through systemd (or a small helper) after an install.
+
 ## Reliability choices
 
 - Every Bluetooth socket has a connect timeout and read/write timeouts, so a phone that goes quiet can never hang the service or its shutdown.

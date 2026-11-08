@@ -15,6 +15,7 @@ use crate::pump;
 use crate::shared::Shared;
 use crate::state::{UiState, UiStore};
 use crate::ui::theme;
+use crate::updater::Updater;
 use crate::views::{
     call_card, contacts::ContactsState, keypad::KeypadState, messages::MessagesState,
     recents::RecentsState, settings::SettingsState, Cmd, Cx,
@@ -81,6 +82,7 @@ pub struct App {
     messages: MessagesState,
     settings: SettingsState,
     notices: Notices,
+    updater: Updater,
     quitting: bool,
     pending_minimise: bool,
     theme_override: Option<ThemePref>,
@@ -133,6 +135,8 @@ impl App {
         if let Some(action) = boot.initial {
             actions_tx.send(action);
         }
+        // Updates are real-phone behaviour: the demo never touches the network.
+        let updater = Updater::start(handle.clone(), actions_tx.clone(), wake.clone());
         let host = NotifierHost {
             handle: handle.clone(),
             actions: actions_tx,
@@ -185,6 +189,7 @@ impl App {
             messages: MessagesState::default(),
             settings: SettingsState::default(),
             notices: Notices::default(),
+            updater,
             quitting: false,
             pending_minimise: boot.start_minimised,
             theme_override: boot.theme,
@@ -488,7 +493,14 @@ impl eframe::App for App {
         egui::CentralPanel::default()
             .frame(Frame::new().fill(pal.content).inner_margin(Margin::ZERO))
             .show(ctx, |ui| {
-                banners::show(ui, &pal, &self.handle, &active_problems, &mut self.notices);
+                banners::show(
+                    ui,
+                    &pal,
+                    &self.handle,
+                    &active_problems,
+                    &mut self.notices,
+                    &self.updater,
+                );
                 let mut cx = Cx {
                     pal,
                     handle: &self.handle,
@@ -497,6 +509,7 @@ impl eframe::App for App {
                     now,
                     off,
                     cmds: &mut cmds,
+                    updater: &self.updater,
                 };
                 if !live.calls.is_empty() {
                     Frame::new()

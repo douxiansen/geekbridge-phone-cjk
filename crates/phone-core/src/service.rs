@@ -484,6 +484,13 @@ fn calls_loop(inner: Arc<Inner>) {
                         }
                     }
                     let next = build_calls(&inner, &snaps, &shown, &since, started, &recorders);
+                    // Update the shared list before announcing anything, so whoever
+                    // reads the state on seeing an event finds it current.
+                    let calls_changed = next != shown;
+                    if calls_changed {
+                        lock(&inner.state).calls = next.clone();
+                        shown = next;
+                    }
                     for e in events {
                         if let CallEvent::Ended {
                             id,
@@ -517,9 +524,7 @@ fn calls_loop(inner: Arc<Inner>) {
                         }
                         inner.emit(Event::Call(e));
                     }
-                    if next != shown {
-                        lock(&inner.state).calls = next.clone();
-                        shown = next;
+                    if calls_changed {
                         inner.emit(Event::CallsChanged);
                     }
                 }

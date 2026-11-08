@@ -1,0 +1,54 @@
+name: Release
+# Push a tag like v0.2.0 to publish a signed release. Installed apps find it and update themselves.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  linux:
+    # An older base keeps the program running on older distributions (glibc).
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: System libraries
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config libxkbcommon-dev libwayland-dev libegl1-mesa-dev libgl1-mesa-dev libfontconfig1-dev
+      - uses: Swatinem/rust-cache@v2
+      - name: The tag must match the version in Cargo.toml
+        run: |
+          want="${GITHUB_REF_NAME#v}"
+          have="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)"
+          [ "$want" = "$have" ] || { echo "tag $GITHUB_REF_NAME does not match Cargo.toml version $have"; exit 1; }
+      - name: Test
+        run: cargo test --workspace --all-features
+      - name: Build
+        run: cargo build --release -p phone-app -p phone-update
+      - name: Package
+        run: ./scripts/package-linux.sh
+      - name: Sign
+        env:
+          UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
+        run: |
+          cd dist
+          : > SHA256SUMS
+          for f in geekbridge-phone-*.tar.gz; do
+            ../target/release/gbp-sign "$f" >> SHA256SUMS
+          done
+          cat SHA256SUMS
+      - name: Release notes from the changelog
+        run: |
+          v="${GITHUB_REF_NAME#v}"
+          awk -v v="$v" '$0 ~ "^## "v"( |$)" {on=1; next} /^## / {on=0} on' CHANGELOG.md > notes.md
+          [ -s notes.md ] || echo "Release $v" > notes.md
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" --title "GeekBridge Phone ${GITHUB_REF_NAME#v}" --notes-file notes.md \
+            dist/geekbridge-phone-*.tar.gz dist/geekbridge-phone-*.tar.gz.sig dist/SHA256SUMS

@@ -37,6 +37,7 @@ pub mod raise_wayland;
 pub mod shared;
 pub mod state;
 pub mod ui;
+pub mod updater;
 pub mod views;
 pub mod window;
 

@@ -64,7 +64,11 @@ Troubleshooting:
 
 ## Privacy
 
-Everything stays on the Bluetooth link between the phone and this computer. Contacts, call history and your text history are cached in a small SQLite database (`cache.db`, owner-only) under `~/.local/share/geekbridge-phone`, so the app starts instantly and does not re-read everything from the phone. Nothing is sent anywhere else, there is no telemetry, and the app makes no network connections.
+Everything stays on the Bluetooth link between the phone and this computer. Contacts, call history and your text history are cached in a small SQLite database (`cache.db`, owner-only) under `~/.local/share/geekbridge-phone`, so the app starts instantly and does not re-read everything from the phone. Nothing is sent anywhere else and there is no telemetry. The only network access is the optional update check (below).
+
+## Updates
+
+The app updates itself from this repository's GitHub releases (*Settings > Updates*, on by default, about once a day; or `geekbridge-phone --check-update` / `--update`). It talks only to `api.github.com` and GitHub's release download hosts, over HTTPS, sends nothing about you, and installs a release only after checking both its SHA-256 checksum **and** an Ed25519 signature against the public key built into the app. The previous program is kept as `geekbridge-phone.previous` for a manual rollback. Turn the check off in Settings, or set `"check_updates": false` in `~/.config/geekbridge-phone/settings.json`. Installs managed by a package manager are left to it. How releases are made: [docs/RELEASING.md](docs/RELEASING.md).
 
 ## How it is built
 
@@ -75,6 +79,7 @@ A Rust workspace:
 - `phone-linux`: the Linux platform: BlueZ + PipeWire telephony over D-Bus, RFCOMM sockets, SDP.
 - `phone-overlay`: the top-right banners (platform-neutral renderer plus a Wayland layer-shell presenter).
 - `phone-app`: the egui application.
+- `phone-update`: the self-updater (GitHub releases, checksum + signature verification, atomic install).
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the design and [docs/PORTING.md](docs/PORTING.md) for Windows and macOS.
 

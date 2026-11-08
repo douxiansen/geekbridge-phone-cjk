@@ -4,6 +4,7 @@
 use crate::model::status::{notice_is_redundant, Problem};
 use crate::ui::theme::{Palette, S2, S3};
 use crate::ui::widgets::{self, BannerAction, Tone};
+use crate::updater::{UpdateStatus, Updater};
 use eframe::egui::{Frame, Margin, Ui};
 use phone_core::service::{Command, Handle};
 use std::time::{Duration, Instant};
@@ -72,8 +73,11 @@ pub fn show(
     handle: &Handle,
     problems: &[Problem],
     notices: &mut Notices,
+    updater: &Updater,
 ) {
-    if problems.is_empty() && notices.is_empty() {
+    let status = updater.status();
+    let update_banner = update_banner_wanted(&status, updater);
+    if problems.is_empty() && notices.is_empty() && !update_banner {
         return;
     }
     Frame::new()
@@ -81,6 +85,7 @@ pub fn show(
         .show(ui, |ui| {
             ui.add_space(S3);
             ui.spacing_mut().item_spacing.y = S2;
+            show_update(ui, pal, updater, &status);
             for p in problems {
                 let retry = widgets::banner(
                     ui,
@@ -112,6 +117,87 @@ pub fn show(
                 notices.dismiss(i);
             }
         });
+}
+
+/// Whether the updater has something to say in a banner.
+fn update_banner_wanted(status: &UpdateStatus, updater: &Updater) -> bool {
+    match status {
+        UpdateStatus::Available(_) => updater.announced().is_some(),
+        UpdateStatus::Installing(_) | UpdateStatus::Installed(_) => true,
+        UpdateStatus::Failed(_) => {
+            updater.last_checked().is_some() && matches!(status, UpdateStatus::Failed(_))
+        }
+        _ => false,
+    }
+}
+
+/// The software-update banner: a new version, progress, or a failure.
+fn show_update(ui: &mut Ui, pal: &Palette, updater: &Updater, status: &UpdateStatus) {
+    match status {
+        UpdateStatus::Available(u) if updater.announced().is_some() => {
+            let notes = u
+                .notes
+                .lines()
+                .map(str::trim)
+                .find(|l| !l.is_empty() && !l.starts_with('#'))
+                .unwrap_or("");
+            let detail: String = notes
+                .trim_start_matches(['-', '*', ' '])
+                .chars()
+                .take(110)
+                .collect();
+            match widgets::banner(
+                ui,
+                pal,
+                Tone::Info,
+                &format!("Version {} is available", u.version),
+                &detail,
+                Some("Update now"),
+                true,
+            ) {
+                Some(BannerAction::Primary) => updater.install(),
+                Some(BannerAction::Dismiss) => updater.dismiss(),
+                None => {}
+            }
+        }
+        UpdateStatus::Installing(v) => {
+            widgets::banner(
+                ui,
+                pal,
+                Tone::Info,
+                &format!("Updating to version {v}…"),
+                "The app restarts when it is done.",
+                None,
+                false,
+            );
+        }
+        UpdateStatus::Installed(v) => {
+            widgets::banner(
+                ui,
+                pal,
+                Tone::Info,
+                &format!("Updated to version {v}"),
+                "Restarting…",
+                None,
+                false,
+            );
+        }
+        // The guard draws the banner and reports a press on Retry.
+        UpdateStatus::Failed(e)
+            if widgets::banner(
+                ui,
+                pal,
+                Tone::Alert,
+                "Could not check for updates",
+                e,
+                Some("Retry"),
+                false,
+            ) == Some(BannerAction::Primary) =>
+        {
+            updater.check_now();
+        }
+        _ => {}
+    }
 }
 
 #[cfg(test)]

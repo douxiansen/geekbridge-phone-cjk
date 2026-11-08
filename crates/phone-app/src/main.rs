@@ -16,6 +16,8 @@ OPTIONS:
     tel:NUMBER        Show the keypad with NUMBER typed in (the running app if there is one)
     --tab <NAME>      Start on keypad, contacts, recents, messages or settings
     --theme <NAME>    system, light or dark for this run
+    --check-update    Say whether a newer release exists (no window)
+    --update          Install the latest release now (no window)
     --demo            Use a fake phone with invented data (for demos and screenshots)
     --scene <NAME>    With --demo: ring, ring-unknown, active, dialing or text
     --size <WxH>      Initial window size, for example 940x660
@@ -47,6 +49,17 @@ struct Parsed {
     tour: bool,
 }
 
+/// Runs a one-shot command line action and turns its result into the text to print.
+fn run_cli(f: fn() -> Result<String, String>) -> String {
+    match f() {
+        Ok(t) => t,
+        Err(e) => {
+            eprintln!("geekbridge-phone: {e}");
+            std::process::exit(1);
+        }
+    }
+}
+
 fn parse_size(s: &str) -> Option<[f32; 2]> {
     let (w, h) = s.split_once(['x', 'X'])?;
     let (w, h): (f32, f32) = (w.trim().parse().ok()?, h.trim().parse().ok()?);
@@ -74,6 +87,8 @@ fn parse(args: impl IntoIterator<Item = String>) -> Result<Cli, String> {
             "-V" | "--version" => {
                 cli.exit_text = Some(format!("geekbridge-phone {}", env!("CARGO_PKG_VERSION")))
             }
+            "--check-update" => cli.exit_text = Some(run_cli(phone_app::updater::cli_check)),
+            "--update" => cli.exit_text = Some(run_cli(phone_app::updater::cli_update)),
             "--demo" => cli.opts.demo = true,
             "--minimised" | "--minimized" | "--background" => cli.opts.minimised = true,
             "--tour" => cli.opts.tour = true,

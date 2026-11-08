@@ -38,6 +38,7 @@ pub struct Cx<'a> {
     pub now: i64,
     pub off: FixedOffset,
     pub cmds: &'a mut Vec<Cmd>,
+    pub updater: &'a crate::updater::Updater,
 }
 
 impl Cx<'_> {

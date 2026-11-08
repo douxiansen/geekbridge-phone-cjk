@@ -17,6 +17,7 @@ path = "src/main.rs"
 
 [dependencies]
 phone-core = { path = "../phone-core" }
+phone-update = { path = "../phone-update" }
 dirs = "6"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 eframe = { version = "0.31.1", default-features = false, features = ["glow", "wayland", "x11"] }

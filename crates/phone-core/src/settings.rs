@@ -30,6 +30,9 @@ pub struct Settings {
     pub load_contacts_on_connect: bool,
     /// How often the inbox is checked, in seconds (2 to 60).
     pub inbox_poll_secs: u32,
+    /// Look for a newer release on GitHub now and then (about once a day). This is the only
+    /// network access the app makes.
+    pub check_updates: bool,
     /// Record calls to audio files. Off by default: recording a call needs
     /// the other person's consent in many places.
     pub record_calls: bool,
@@ -52,6 +55,7 @@ impl Default for Settings {
             start_minimised: false,
             load_contacts_on_connect: true,
             inbox_poll_secs: 5,
+            check_updates: true,
             record_calls: false,
             recordings_dir: None,
         }

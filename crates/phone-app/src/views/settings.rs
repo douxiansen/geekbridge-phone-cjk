@@ -59,6 +59,7 @@ impl SettingsState {
                         self.calls(ui, cx, &mut s);
                         self.phones(ui, cx, &mut s);
                         self.background(ui, cx, &mut s);
+                        self.updates(ui, cx, &mut s);
                         self.data(ui, cx, &mut s);
                         self.diagnostics(ui, cx);
                         self.about(ui, cx);
@@ -314,6 +315,70 @@ impl SettingsState {
                 "Start minimised",
                 "Open in the background when you log in.",
                 &mut s.start_minimised,
+            );
+        });
+    }
+
+    fn updates(&mut self, ui: &mut Ui, cx: &Cx, s: &mut Settings) {
+        use crate::updater::{UpdateStatus, CURRENT_VERSION};
+        let pal = cx.pal;
+        theme::section(ui, &pal, "Updates");
+        theme::card(ui, &pal, |ui| {
+            toggle_row(
+                ui,
+                &pal,
+                "Check for updates",
+                "Looks on GitHub about once a day. This is the only time the app uses the network.",
+                &mut s.check_updates,
+            );
+            widgets::card_divider(ui, &pal);
+            let status = cx.updater.status();
+            let line = match &status {
+                UpdateStatus::Idle => "Not checked yet.".to_string(),
+                UpdateStatus::Checking => "Checking…".to_string(),
+                UpdateStatus::UpToDate => "You have the latest version.".to_string(),
+                UpdateStatus::Available(u) => format!("Version {} is available.", u.version),
+                UpdateStatus::Installing(v) => format!("Installing version {v}…"),
+                UpdateStatus::Installed(v) => format!("Installed version {v}; restarting."),
+                UpdateStatus::Failed(e) => format!("Could not check: {e}"),
+                UpdateStatus::ManagedElsewhere => {
+                    "Installed by a package manager: update it there.".to_string()
+                }
+            };
+            widgets::setting_row(
+                ui,
+                &pal,
+                &format!("Version {CURRENT_VERSION}"),
+                &line,
+                |ui| {
+                    let busy = matches!(
+                        status,
+                        UpdateStatus::Checking
+                            | UpdateStatus::Installing(_)
+                            | UpdateStatus::Installed(_)
+                    );
+                    let (label, available) = match &status {
+                        UpdateStatus::Available(_) => ("Update now", true),
+                        _ => ("Check now", false),
+                    };
+                    if theme::pill(
+                        ui,
+                        &pal,
+                        label,
+                        ButtonKind::Plain,
+                        !busy,
+                        PillSize::Small,
+                        0.0,
+                    )
+                    .clicked()
+                    {
+                        if available {
+                            cx.updater.install();
+                        } else {
+                            cx.updater.check_now();
+                        }
+                    }
+                },
             );
         });
     }
