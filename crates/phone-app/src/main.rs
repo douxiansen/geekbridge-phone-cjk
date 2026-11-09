@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! `geekbridge-phone`: the desktop app.
 
+// A release build on Windows is a window program: no console window opens next to it.
+// (Debug builds keep the console, so `cargo run` still shows the log.)
+#![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
+
 use phone_app::instance::Request;
 use phone_app::model::tab::Tab;
 use phone_app::RunOptions;
@@ -135,7 +139,7 @@ fn parse(args: impl IntoIterator<Item = String>) -> Result<Cli, String> {
 }
 
 fn main() {
-    let _ = env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("warn"))
+    let _ = env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("warn,fontdb=error"))
         .try_init();
     let cli = match parse(std::env::args().skip(1)) {
         Ok(c) => c,

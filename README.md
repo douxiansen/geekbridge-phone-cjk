@@ -87,7 +87,9 @@ Pairing is a one-time step, done by your operating system, not by the app. After
 
 ## Install
 
-From a release: unpack the tarball and run `./scripts/install.sh` (per user, no root; it starts a background service). From source:
+**Windows:** download `GeekBridge-Phone-<version>-windows-x64.zip` from the [Windows release](https://github.com/fspecii/geekbridge-phone/releases/tag/v0.1.4-windows), unzip it, right-click `Install.ps1` and choose *Run with PowerShell* (one administrator prompt; the package is signed with the project's own certificate). Details and first-time phone setup: [docs/WINDOWS.md](docs/WINDOWS.md).
+
+**Linux:** from a release: unpack the tarball and run `./scripts/install.sh` (per user, no root; it starts a background service). From source:
 
 ```sh
 cargo build --release -p phone-app

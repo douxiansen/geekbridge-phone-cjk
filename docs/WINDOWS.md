@@ -55,12 +55,20 @@ explorer.exe shell:AppsFolder\GeekBridge.Phone_et8bt1m87t33c!App
 A plain `cargo run -p phone-app` still runs (messages, contacts, call control through the fallback),
 but without voice.
 
-## Giving it to other people
+## Installing it (everyone else)
 
-Developer Mode installs an unsigned package for the developer only. For everyone else the package
-must be signed. Free routes: a self-signed certificate with an installer script that trusts it
-(needs one administrator prompt), or code signing for open-source projects such as SignPath
-Foundation. The Microsoft Store signs for you but adds review and a fee.
+Download `GeekBridge-Phone-<version>-windows-x64.zip` from the Releases page, unzip it, right-click
+`Install.ps1` and choose **Run with PowerShell**. The package is signed with the project's own
+certificate (`GeekBridge.cer` in the zip), which Windows does not trust by default, so the script
+asks for administrator rights once, trusts that certificate for packages, and installs the app.
+`Uninstall.ps1` removes the app and, if you say yes, the trust. Windows 10 2004 or later, or
+Windows 11; no other downloads are needed.
+
+Maintainers build the release with `packaging/windows/build-release.ps1`. It needs the signing
+certificate in the certificate store (the script's help shows how to create it); back that
+certificate up, because every update must be signed by the same one. When the project outgrows a
+self-signed certificate, signing for open-source projects (SignPath Foundation) or the Microsoft
+Store would remove the trust prompt.
 
 ## What was tried and does not work
 

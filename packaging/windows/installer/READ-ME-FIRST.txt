@@ -1,0 +1,29 @@
+GeekBridge Phone for Windows
+============================
+
+Calls, texts and contacts from your phone on your computer, with the call voice through the
+computer's speakers and microphone. No phone app, no account, no cloud.
+
+Needs: Windows 10 (version 2004 or later) or Windows 11, a Bluetooth adapter, an Android phone
+or an iPhone.
+
+Install
+-------
+1. Unzip this folder anywhere.
+2. Right-click Install.ps1 and choose "Run with PowerShell". Windows asks for administrator
+   rights once. The script trusts the GeekBridge certificate (GeekBridge.cer) and installs the
+   package (GeekBridge.Phone.msix). Nothing else changes.
+3. Start "GeekBridge Phone" from the Start menu.
+
+Why a certificate? Windows only lets an installed app take phone calls, and this package is
+signed by the project itself rather than a paid certificate authority. You can inspect
+GeekBridge.cer before trusting it. Uninstall.ps1 removes the app and, if you say yes, the trust.
+
+First use
+---------
+1. In the app, pair your phone (the app finds it and shows a number to compare).
+2. On the phone: Settings > Bluetooth > the gear next to this computer > switch on "Calls"
+   (call audio). If it switches itself off, unpair the phone in the app and pair once more.
+3. Ring the phone. A banner appears at the top right; press Answer and talk through the computer.
+
+More: https://github.com/fspecii/geekbridge-phone/blob/main/docs/WINDOWS.md
