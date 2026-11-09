@@ -132,7 +132,8 @@ pub fn is_packaged() -> bool {
 /// says no and the caller keeps its fallback.
 pub fn ensure_registered(address: &str) -> Result<()> {
     let transport = open_transport(&hex_address(address))?;
-    if !transport.IsRegistered().map_err(werr)? {
+    let was_registered = transport.IsRegistered().map_err(werr)?;
+    if !was_registered {
         transport.RegisterApp().map_err(werr)?;
     }
     let connected = transport
@@ -140,6 +141,11 @@ pub fn ensure_registered(address: &str) -> Result<()> {
         .map_err(werr)?
         .join()
         .map_err(werr)?;
+    log::info!(
+        "call link for {address}: registered before {was_registered}, now {:?}, connected {connected}, audio routing {:?}",
+        transport.IsRegistered().ok(),
+        transport.AudioRoutingStatus().ok()
+    );
     if connected {
         Ok(())
     } else {

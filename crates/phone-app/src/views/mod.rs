@@ -7,6 +7,7 @@ pub mod contacts;
 pub mod guide;
 pub mod keypad;
 pub mod messages;
+pub mod pairing;
 pub mod recents;
 pub mod settings;
 
@@ -27,6 +28,8 @@ pub enum Cmd {
     OpenConversation(String),
     /// Open the iPhone setup guide, whether or not it was dismissed.
     OpenGuide,
+    /// Open the "Pair a phone" window.
+    OpenPairing,
     /// Quit the whole app.
     Quit,
 }

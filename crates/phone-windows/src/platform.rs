@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 use crate::rfcomm::{RfcommStream, MAP_MAS, PBAP_PSE};
 use phone_core::calls::CallSnapshot;
-use phone_core::platform::{PhoneInfo, Platform, PlatformError, Result, Stream};
+use phone_core::platform::{NearbyDevice, PhoneInfo, Platform, PlatformError, Result, Stream};
 use windows::Devices::Bluetooth::{BluetoothConnectionStatus, BluetoothDevice};
 use windows::Devices::Enumeration::DeviceInformation;
 
@@ -18,6 +18,33 @@ fn format_address(a: u64) -> String {
         .map(|i| format!("{:02X}", (a >> (i * 8)) & 0xff))
         .collect::<Vec<_>>()
         .join(":")
+}
+
+/// The phone's address in a Windows device id such as `Bluetooth#Bluetooth90:e8:...-6c:ac:...`
+/// (this computer's adapter, a dash, the phone).
+fn address_from_device_id(id: &str) -> Option<String> {
+    let tail = id.rsplit('-').next()?;
+    let parts: Vec<&str> = tail.split(':').collect();
+    let ok = parts.len() == 6
+        && parts
+            .iter()
+            .all(|p| p.len() == 2 && p.chars().all(|c| c.is_ascii_hexdigit()));
+    ok.then(|| tail.to_uppercase())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::address_from_device_id;
+
+    #[test]
+    fn the_phone_address_is_the_last_part_of_the_device_id() {
+        assert_eq!(
+            address_from_device_id("Bluetooth#Bluetooth90:e8:68:0f:30:72-6c:ac:c2:5c:46:da")
+                .as_deref(),
+            Some("6C:AC:C2:5C:46:DA")
+        );
+        assert_eq!(address_from_device_id("nonsense"), None);
+    }
 }
 
 impl Platform for WindowsPlatform {
@@ -56,6 +83,52 @@ impl Platform for WindowsPlatform {
             });
         }
         Ok(out)
+    }
+    fn can_pair(&self) -> bool {
+        true
+    }
+    fn scan_nearby(&self, seconds: u32) -> Result<Vec<NearbyDevice>> {
+        let found = crate::pairing::scan(std::time::Duration::from_secs(u64::from(seconds)))?;
+        Ok(found
+            .into_iter()
+            .filter(|d| !d.paired)
+            .map(|d| NearbyDevice {
+                id: d.id,
+                name: d.name,
+            })
+            .collect())
+    }
+    fn pair(
+        &self,
+        id: &str,
+        show_code: std::sync::Arc<dyn Fn(Option<String>) + Send + Sync>,
+    ) -> Result<()> {
+        // The phone asks its owner to confirm the same number; this side shows it and accepts,
+        // because the user started the pairing here by picking the phone.
+        crate::pairing::pair(id, move |pin| {
+            show_code(pin.map(str::to_string));
+            true
+        })?;
+        // The phone only keeps "Calls" switched on once this computer's call link is up, so set
+        // it up right away instead of waiting for the next check. Windows needs a few seconds
+        // after pairing before it offers the link.
+        if let Some(address) = address_from_device_id(id) {
+            if crate::winline::is_packaged() {
+                for _ in 0..15 {
+                    if crate::winline::ensure_registered(&address).is_ok() {
+                        break;
+                    }
+                    std::thread::sleep(std::time::Duration::from_secs(2));
+                }
+            }
+        }
+        Ok(())
+    }
+    fn unpair(&self, address: &str) -> Result<()> {
+        match crate::pairing::paired_id(address)? {
+            Some(id) => crate::pairing::unpair(&id),
+            None => Ok(()),
+        }
     }
     fn open_map(&self, a: &str) -> Result<Box<dyn Stream>> {
         Ok(Box::new(RfcommStream::connect(a, MAP_MAS)?))

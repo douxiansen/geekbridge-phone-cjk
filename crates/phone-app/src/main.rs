@@ -138,9 +138,33 @@ fn parse(args: impl IntoIterator<Item = String>) -> Result<Cli, String> {
     Ok(cli)
 }
 
+/// Starts logging. A Windows release has no console, so it writes to a file the user can find
+/// (`%LOCALAPPDATA%\GeekBridge\geekbridge-phone.log`, started afresh when it grows past 1 MB);
+/// elsewhere the log goes to the terminal as before.
+fn init_logging() {
+    let mut builder = env_logger::Builder::from_env(
+        env_logger::Env::default().default_filter_or("warn,phone_windows=debug,fontdb=error"),
+    );
+    #[cfg(windows)]
+    if let Some(dir) = dirs::data_local_dir().map(|d| d.join("GeekBridge")) {
+        let path = dir.join("geekbridge-phone.log");
+        let _ = std::fs::create_dir_all(&dir);
+        if std::fs::metadata(&path).is_ok_and(|m| m.len() > 1_000_000) {
+            let _ = std::fs::remove_file(&path);
+        }
+        if let Ok(file) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&path)
+        {
+            builder.target(env_logger::Target::Pipe(Box::new(file)));
+        }
+    }
+    let _ = builder.try_init();
+}
+
 fn main() {
-    let _ = env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("warn,fontdb=error"))
-        .try_init();
+    init_logging();
     let cli = match parse(std::env::args().skip(1)) {
         Ok(c) => c,
         Err(e) => {

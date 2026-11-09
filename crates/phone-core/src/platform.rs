@@ -33,6 +33,14 @@ pub struct PhoneInfo {
     pub apple: bool,
 }
 
+/// A device in range that is not paired yet.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NearbyDevice {
+    /// What to pass back to [`Platform::pair`].
+    pub id: String,
+    pub name: String,
+}
+
 /// The per-OS half of the app: finding phones, opening the message and
 /// phonebook services, and controlling calls.
 pub trait Platform: Send + Sync {
@@ -64,6 +72,35 @@ pub trait Platform: Send + Sync {
     fn start_recording(&self, _address: &str, _dir: &std::path::Path) -> Result<Box<dyn Recorder>> {
         Err(PlatformError::Other(
             "call recording is not supported on this system".into(),
+        ))
+    }
+    /// Whether this system can pair a phone from inside the app. Where it cannot (the user pairs
+    /// in the system's Bluetooth settings), the pairing methods below say so.
+    fn can_pair(&self) -> bool {
+        false
+    }
+    /// Looks for unpaired devices in range for about `seconds` seconds.
+    fn scan_nearby(&self, _seconds: u32) -> Result<Vec<NearbyDevice>> {
+        Err(PlatformError::Other(
+            "pairing from the app is not supported on this system".into(),
+        ))
+    }
+    /// Pairs with a device found by [`Platform::scan_nearby`]. `show_code` gets the number the
+    /// phone shows too (when there is one) so the user can compare; it is called before this
+    /// returns. Blocks until pairing ends.
+    fn pair(
+        &self,
+        _id: &str,
+        _show_code: std::sync::Arc<dyn Fn(Option<String>) + Send + Sync>,
+    ) -> Result<()> {
+        Err(PlatformError::Other(
+            "pairing from the app is not supported on this system".into(),
+        ))
+    }
+    /// Removes the pairing with the phone at `address`.
+    fn unpair(&self, _address: &str) -> Result<()> {
+        Err(PlatformError::Other(
+            "unpairing from the app is not supported on this system".into(),
         ))
     }
     /// Moves the call's voice onto this computer's speakers and microphone.

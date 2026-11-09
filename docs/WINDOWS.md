@@ -37,10 +37,16 @@ that fallback: a phone accepts one hands-free connection, and it must be Windows
 
 ## One-time setup for a user
 
-1. Pair the phone from the app.
-2. On the phone: Settings > Bluetooth > the gear next to this computer > switch on **Calls**
-   (call audio). If it switches itself off again, unpair and pair once more from the app.
+1. Pair the phone from the app (Settings > Pair a phone, which also opens by itself when no phone is
+   paired). The app then sets up the call link; the window says when it is ready.
+2. Only then, on the phone: Settings > Bluetooth > the gear next to this computer > switch on **Calls**
+   (call audio). The phone keeps it on only while this computer's call link is up; if it switches
+   itself off, wait for the link (see the log below) and try again.
 3. Ring the phone. The app shows a banner when this is still missing.
+
+The app writes a log to `%LOCALAPPDATA%\GeekBridge\geekbridge-phone.log` (for the installed package:
+`%LOCALAPPDATA%\Packages\GeekBridge.Phone_*\LocalCache\Local\GeekBridge\`). A line starting
+`call link for ...` shows whether Windows accepted the registration.
 
 ## Building and running it as a developer
 

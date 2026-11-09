@@ -84,6 +84,8 @@ pub struct App {
     settings: SettingsState,
     notices: Notices,
     guide: GuideState,
+    platform: Arc<dyn Platform>,
+    pairing: crate::views::pairing::PairingState,
     /// Since when a connected phone has had no working call link (Windows setup hint).
     calls_wait_since: Option<Instant>,
     updater: Updater,
@@ -126,6 +128,7 @@ impl App {
         };
         let mut options = Options::new(boot.paths.clone());
         options.wake = Some(wake.clone());
+        let platform_for_ui = boot.platform.clone();
         let (service, events) = Service::start(boot.platform, options);
         let handle = service.handle();
         let shared = Arc::new(Shared::default());
@@ -196,6 +199,8 @@ impl App {
             settings: SettingsState::default(),
             notices: Notices::default(),
             guide: GuideState::default(),
+            platform: platform_for_ui,
+            pairing: Default::default(),
             calls_wait_since: None,
             updater,
             quitting: false,
@@ -642,9 +647,20 @@ impl eframe::App for App {
                     self.messages.open_conversation(&number);
                 }
                 Cmd::OpenGuide => self.guide.open_manually(),
+                Cmd::OpenPairing => self.pairing.open(&self.platform, ctx),
                 Cmd::Quit => self.quit(ctx),
             }
         }
+
+        // The "Pair a phone" window: opens by itself when no phone is paired, draws over everything.
+        self.pairing.auto_open(
+            &self.platform,
+            ctx,
+            live.phones.is_empty(),
+            live.in_call(),
+            now_instant,
+        );
+        self.pairing.show(ctx, &pal, &self.platform, &live);
 
         // The iPhone setup guide: opens by itself for a phone that needs it, draws over everything.
         {

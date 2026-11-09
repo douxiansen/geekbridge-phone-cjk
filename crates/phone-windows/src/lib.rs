@@ -29,4 +29,4 @@ pub use radio::{bluetooth_state, turn_on_bluetooth, BluetoothState};
 #[cfg(windows)]
 pub use rfcomm::{RfcommStream, MAP_MAS, PBAP_PSE};
 #[cfg(windows)]
-pub use winline::{ensure_registered, is_packaged};
+pub use winline::{available as phone_line_exists, ensure_registered, is_packaged};

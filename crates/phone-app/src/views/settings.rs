@@ -302,6 +302,31 @@ impl SettingsState {
                     s.preferred_phone = Some(p.address.clone());
                 }
             }
+            #[cfg(target_os = "windows")]
+            {
+                widgets::card_divider(ui, &pal);
+                widgets::setting_row(
+                    ui,
+                    &pal,
+                    "Pair a phone",
+                    "Find your phone, pair it, or remove a pairing, without leaving the app.",
+                    |ui| {
+                        if theme::pill(
+                            ui,
+                            &pal,
+                            "Pair\u{2026}",
+                            ButtonKind::Plain,
+                            true,
+                            PillSize::Regular,
+                            0.0,
+                        )
+                        .clicked()
+                        {
+                            cx.cmds.push(Cmd::OpenPairing);
+                        }
+                    },
+                );
+            }
             if cx.live.phones.iter().any(|p| p.apple) {
                 widgets::card_divider(ui, &pal);
                 widgets::setting_row(
