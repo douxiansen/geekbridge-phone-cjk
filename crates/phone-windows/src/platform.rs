@@ -20,6 +20,57 @@ fn format_address(a: u64) -> String {
         .join(":")
 }
 
+/// Bluetooth SIG's company id for Apple, as Windows writes it in a device's id: `VID&0001` (the
+/// Bluetooth SIG numbering) followed by the company id `004C`.
+const APPLE_VID: &str = "VID&0001004C";
+
+/// Whether a Windows device id belongs to the phone at `hex_address` and carries Apple's vendor id.
+fn id_is_apple(id: &str, hex_address: &str) -> bool {
+    let id = id.to_uppercase();
+    id.contains(hex_address) && id.contains(APPLE_VID)
+}
+
+/// Ids of the phones' call-link transports. They name the phone's address and vendor, which is how
+/// an iPhone is told apart (the Linux version reads the same fact from BlueZ's modalias).
+/// Looked up at most every 20 seconds: the phone list is asked for often.
+fn transport_ids() -> Vec<String> {
+    use std::sync::{Mutex, OnceLock};
+    use std::time::{Duration, Instant};
+    use windows::ApplicationModel::Calls::{PhoneLineTransport, PhoneLineTransportDevice};
+    type Cached = Mutex<Option<(Instant, Vec<String>)>>;
+    static CACHE: OnceLock<Cached> = OnceLock::new();
+    let cache = CACHE.get_or_init(Default::default);
+    if let Some((at, ids)) = cache.lock().unwrap().as_ref() {
+        if at.elapsed() < Duration::from_secs(20) {
+            return ids.clone();
+        }
+    }
+    let ids: Vec<String> = PhoneLineTransportDevice::GetDeviceSelectorForPhoneLineTransport(
+        PhoneLineTransport::Bluetooth,
+    )
+    .and_then(|sel| DeviceInformation::FindAllAsyncAqsFilter(&sel))
+    .and_then(|op| op.join())
+    .map(|found| {
+        found
+            .into_iter()
+            .filter_map(|d| d.Id().ok().map(|i| i.to_string()))
+            .collect()
+    })
+    .unwrap_or_default();
+    *cache.lock().unwrap() = Some((Instant::now(), ids.clone()));
+    ids
+}
+
+/// Whether the paired phone is an iPhone: Apple's vendor id in its device ids, or "iPhone" in the
+/// name it gives itself.
+fn is_apple(address: &str, name: &str) -> bool {
+    if name.to_lowercase().contains("iphone") {
+        return true;
+    }
+    let hex = address.replace(':', "").to_uppercase();
+    transport_ids().iter().any(|id| id_is_apple(id, &hex))
+}
+
 /// The phone's address in a Windows device id such as `Bluetooth#Bluetooth90:e8:...-6c:ac:...`
 /// (this computer's adapter, a dash, the phone).
 fn address_from_device_id(id: &str) -> Option<String> {
@@ -30,21 +81,6 @@ fn address_from_device_id(id: &str) -> Option<String> {
             .iter()
             .all(|p| p.len() == 2 && p.chars().all(|c| c.is_ascii_hexdigit()));
     ok.then(|| tail.to_uppercase())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::address_from_device_id;
-
-    #[test]
-    fn the_phone_address_is_the_last_part_of_the_device_id() {
-        assert_eq!(
-            address_from_device_id("Bluetooth#Bluetooth90:e8:68:0f:30:72-6c:ac:c2:5c:46:da")
-                .as_deref(),
-            Some("6C:AC:C2:5C:46:DA")
-        );
-        assert_eq!(address_from_device_id("nonsense"), None);
-    }
 }
 
 impl Platform for WindowsPlatform {
@@ -74,15 +110,23 @@ impl Platform for WindowsPlatform {
             if !connected && !windows_line && !crate::winline::is_packaged() {
                 crate::hfp::reconnect_in_background(&address);
             }
+            let name = dev.Name().map_err(werr)?.to_string();
+            let apple = is_apple(&address, &name);
             out.push(PhoneInfo {
                 address,
-                name: dev.Name().map_err(werr)?.to_string(),
+                name,
                 connected,
                 battery: None,
-                apple: false,
+                apple,
             });
         }
         Ok(out)
+    }
+    fn computer_name(&self) -> Option<String> {
+        // Windows names its Bluetooth radio after the computer; that is what a phone lists.
+        std::env::var("COMPUTERNAME")
+            .ok()
+            .filter(|n| !n.trim().is_empty())
     }
     fn can_pair(&self) -> bool {
         true
@@ -179,5 +223,30 @@ impl Platform for WindowsPlatform {
         } else {
             crate::hfp::send_tones(a, t)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{address_from_device_id, id_is_apple};
+
+    #[test]
+    fn the_phone_address_is_the_last_part_of_the_device_id() {
+        assert_eq!(
+            address_from_device_id("Bluetooth#Bluetooth90:e8:68:0f:30:72-6c:ac:c2:5c:46:da")
+                .as_deref(),
+            Some("6C:AC:C2:5C:46:DA")
+        );
+        assert_eq!(address_from_device_id("nonsense"), None);
+    }
+
+    #[test]
+    fn apple_is_told_by_the_vendor_id_in_the_phone_s_own_device_id() {
+        let iphone = r"\\?\BTHENUM#{0000111f-0000-1000-8000-00805f9b34fb}_VID&0001004c_PID&12a8#9&2e5a28ba&1&AABBCCDDEEFF_C00000000#{bd41df2d}\service";
+        let samsung = r"\\?\BTHENUM#{0000111f-0000-1000-8000-00805f9b34fb}_VID&00010075_PID&0100#9&2e5a28ba&1&6CACC25C46DA_C00000000#{bd41df2d}\service";
+        assert!(id_is_apple(iphone, "AABBCCDDEEFF"));
+        assert!(!id_is_apple(samsung, "6CACC25C46DA"));
+        // Another phone's address does not make this phone Apple.
+        assert!(!id_is_apple(iphone, "6CACC25C46DA"));
     }
 }

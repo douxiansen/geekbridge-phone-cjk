@@ -233,7 +233,10 @@ impl PairingState {
                     Stage::List(list) => action = list_view(ui, pal, list, live),
                     Stage::Pairing { name, code } => pairing(ui, pal, name, code.as_deref()),
                     Stage::Unpairing { name } => busy(ui, pal, &format!("Removing {name}\u{2026}")),
-                    Stage::Done { name } => action = done(ui, pal, name, live.calls_ready),
+                    Stage::Done { name } => {
+                        let apple = live.phones.iter().any(|p| p.apple && &p.name == name);
+                        action = done(ui, pal, name, live.calls_ready, apple)
+                    }
                     Stage::Failed(why) => action = failed(ui, pal, why),
                 }
             });
@@ -394,10 +397,18 @@ fn list_view(ui: &mut Ui, pal: &Palette, list: &[NearbyDevice], live: &Live) -> 
     action
 }
 
-fn done(ui: &mut Ui, pal: &Palette, name: &str, calls_ready: bool) -> Action {
+fn done(ui: &mut Ui, pal: &Palette, name: &str, calls_ready: bool, apple: bool) -> Action {
     ui.label(RichText::new(format!("Paired with {name}")).size(15.0));
     ui.add_space(S2);
-    if calls_ready {
+    if apple {
+        // An iPhone shares texts and contacts only after it is told to, and the setup guide that
+        // opens next walks through it. Calls need nothing extra on the phone.
+        ui.label(theme::caption(
+            pal,
+            "On the iPhone open Settings > Bluetooth, tap the i next to this computer, and switch on Show Notifications \
+             and Sync Contacts. The setup guide shows each step as it comes true.",
+        ));
+    } else if calls_ready {
         ui.label(theme::caption(
             pal,
             "One more thing for calls: on the phone open Settings > Bluetooth, tap the gear next to this computer \

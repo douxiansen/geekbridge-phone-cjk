@@ -48,6 +48,21 @@ The app writes a log to `%LOCALAPPDATA%\GeekBridge\geekbridge-phone.log` (for th
 `%LOCALAPPDATA%\Packages\GeekBridge.Phone_*\LocalCache\Local\GeekBridge\`). A line starting
 `call link for ...` shows whether Windows accepted the registration.
 
+## iPhone
+
+The app tells an iPhone from other phones by Apple's Bluetooth vendor id, which Windows writes into
+the id of the phone's call-link device (`VID&0001004C`), the same fact the Linux version reads from
+BlueZ. For an iPhone the setup guide opens by itself, as on Linux:
+
+1. Pair the iPhone from the app.
+2. On the iPhone: Settings > Bluetooth, tap the **i** next to this computer, and switch on
+   **Show Notifications** (texts) and **Sync Contacts**.
+3. Ring the iPhone and answer from the banner. If the voice stays on the iPhone, tap **Audio** on its
+   call screen and pick this computer once.
+
+Apple lets a car send texts only by voice, so sending a text may be refused. Not yet verified on
+Windows with a real iPhone.
+
 ## Building and running it as a developer
 
 Needs Rust (MSVC), Python 3, and **Developer Mode** (Settings > System > For developers).
