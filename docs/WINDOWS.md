@@ -60,8 +60,8 @@ BlueZ. For an iPhone the setup guide opens by itself, as on Linux:
 3. Ring the iPhone and answer from the banner. If the voice stays on the iPhone, tap **Audio** on its
    call screen and pick this computer once.
 
-Apple lets a car send texts only by voice, so sending a text may be refused. Not yet verified on
-Windows with a real iPhone.
+Apple lets a car send texts only by voice, so sending a text may be refused. Tried on Windows with a
+real iPhone: pairing, the setup guide and calls work.
 
 ## Building and running it as a developer
 
@@ -107,8 +107,9 @@ Written down so nobody repeats it:
 
 ## Limits
 
-- Needs the phone's **Calls** permission for the computer (step 2 above).
+- An Android phone needs **Calls** switched on for the computer (step 2 above); an iPhone needs
+  Show Notifications and Sync Contacts (see iPhone).
 - Windows 11 22H2 and later changed parts of the phone-line API. The app was developed against
-  Windows 11 Enterprise LTSC 2024 and a Samsung Galaxy Z Fold5; other phones and Windows builds
-  are untested.
-- Whether the setup survives a restart, and an iPhone, are untested.
+  Windows 11 Enterprise LTSC 2024 with a Samsung Galaxy Z Fold5 and an iPhone; other phones and
+  Windows builds are untested.
+- Whether the setup survives a restart is untested.

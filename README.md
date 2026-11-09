@@ -33,7 +33,7 @@ So that is the goal:
 
 It looks the way we think a phone companion should: macOS-style banners and dot-matrix type (true black or warm off-white, one red accent), in both light and dark.
 
-> **Status: 0.1.x, Linux and Windows.** Verified on real hardware: a Samsung Galaxy Z Fold5 (Android 17) and an iPhone on Linux, and the Z Fold5 on Windows 11 (pairing, texts, contacts, calls with the voice through the computer; see [docs/WINDOWS.md](docs/WINDOWS.md)). The OS-independent core also passes its tests on macOS in CI. The macOS platform layer is next ([docs/PORTING.md](docs/PORTING.md)).
+> **Status: 0.1.x, Linux and Windows.** Verified on real hardware: a Samsung Galaxy Z Fold5 (Android 17) and an iPhone on Linux, and the same two phones on Windows 11 (pairing from the app, texts, contacts, calls with the voice through the computer; see [docs/WINDOWS.md](docs/WINDOWS.md)). The OS-independent core also passes its tests on macOS in CI. The macOS platform layer is next ([docs/PORTING.md](docs/PORTING.md)).
 
 ## What it does
 
@@ -61,7 +61,7 @@ Verified means tested on a real phone. Other phones should behave the same, sinc
 | Computer | Status |
 | --- | --- |
 | **Linux** (BlueZ + PipeWire) | Works today |
-| **Windows** | Works, as an installed package ([docs/WINDOWS.md](docs/WINDOWS.md)). Windows only carries the call voice for an installed app; run unpackaged you get calls, texts and contacts without the voice. |
+| **Windows** | Works with **Android and iPhone**, as an installed package ([docs/WINDOWS.md](docs/WINDOWS.md)): pairing from the app, calls with the voice through the computer, texts and contacts. Windows only carries the call voice for an installed app; run unpackaged you get calls, texts and contacts without the voice. |
 | **macOS** | After Windows. The core already passes its tests on macOS in CI. |
 
 ## Setting up
@@ -117,7 +117,7 @@ The app updates itself from this repository's GitHub releases (*Settings > Updat
 
 ## Roadmap
 
-- **Windows**: a signed installer for everyone else (today it installs as an unsigned developer package), and more phones tested. [Details](docs/WINDOWS.md).
+- **Windows**: a certificate from a recognised authority (the installer now trusts the project's own, with one administrator prompt), and more phones and Windows builds tested. [Details](docs/WINDOWS.md).
 - **macOS**: the same, with Apple's Bluetooth frameworks.
 - **More than one phone at a time**, and quick switching between them.
 - **More of the ecosystem**: shared clipboard and file drop are not part of calls and texts over Bluetooth, and would need another link.
