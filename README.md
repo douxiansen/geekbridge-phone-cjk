@@ -26,14 +26,14 @@ Phones and computers should work together whatever you buy. Today the smooth exp
 So that is the goal:
 
 - **Any phone.** Android and iPhone, the same app, the same banners.
-- **Any computer.** Linux and Windows now; macOS is the next port.
+- **Any computer.** Linux and Windows now, calls with their voice on both; macOS is the last one left.
 - **Your data stays yours.** No account, no server, no telemetry. It all stays on your Bluetooth link and your disk.
 - **Nothing to install on the phone.** The phone already thinks your computer is a car.
 - **Open and small.** GPL-licensed, written in Rust, one lightweight program.
 
 It looks the way we think a phone companion should: macOS-style banners and dot-matrix type (true black or warm off-white, one red accent), in both light and dark.
 
-> **Status: 0.1.x, Linux and Windows.** Verified on real hardware: a Samsung Galaxy Z Fold5 (Android 17) and an iPhone on Linux, and the same two phones on Windows 11 (pairing from the app, texts, contacts, calls with the voice through the computer; see [docs/WINDOWS.md](docs/WINDOWS.md)). The OS-independent core also passes its tests on macOS in CI. The macOS platform layer is next ([docs/PORTING.md](docs/PORTING.md)).
+> **Status: 0.1.x, Linux and Windows.** Verified on real hardware: a Samsung Galaxy Z Fold5 (Android 17) and an iPhone on Linux, and the same two phones on Windows 11 (pairing from the app, texts, contacts, calls with the voice through the computer; see [docs/WINDOWS.md](docs/WINDOWS.md)). On both, the call voice comes through the computer's speakers and microphone. The OS-independent core also passes its tests on macOS in CI; **macOS is the only platform still to port** ([docs/PORTING.md](docs/PORTING.md)).
 
 ## What it does
 
@@ -60,9 +60,9 @@ Verified means tested on a real phone. Other phones should behave the same, sinc
 
 | Computer | Status |
 | --- | --- |
-| **Linux** (BlueZ + PipeWire) | Works today |
-| **Windows** | Works with **Android and iPhone**, as an installed package ([docs/WINDOWS.md](docs/WINDOWS.md)): pairing from the app, calls with the voice through the computer, texts and contacts. Windows only carries the call voice for an installed app; run unpackaged you get calls, texts and contacts without the voice. |
-| **macOS** | After Windows. The core already passes its tests on macOS in CI. |
+| **Linux** (BlueZ + PipeWire) | Works today, including the call voice through the computer |
+| **Windows** | Works today with **Android and iPhone**, including the call voice through the computer ([docs/WINDOWS.md](docs/WINDOWS.md)): pairing from the app, calls, texts and contacts. It runs as an installed package, which is what lets Windows carry the voice; run unpackaged you get calls, texts and contacts without the voice. |
+| **macOS** | The last one to port. The core already passes its tests on macOS in CI. |
 
 ## Setting up
 
@@ -78,7 +78,12 @@ Verified means tested on a real phone. Other phones should behave the same, sinc
 2. On the iPhone open **Settings > Bluetooth**, tap the **ⓘ** next to your computer, and switch on **Show Notifications** (texts) and **Sync Contacts**.
 3. Start **GeekBridge Phone**. Calls, contacts and texts appear within moments.
 
-Pairing is a one-time step, done by your operating system, not by the app. After that the phone reconnects on its own whenever it is nearby, like a car.
+Pairing is a one-time step. On Linux your operating system does it; **on Windows the app does it for you** (*Settings > Pair a phone*, which opens by itself when no phone is paired), and then asks you to switch on **Calls** on an Android phone. After that the phone reconnects on its own whenever it is nearby, like a car.
+
+## Requirements (Windows)
+
+- Windows 10 (version 2004 or later) or Windows 11, and a Bluetooth adapter. Nothing else to install: the release includes everything it needs.
+- It installs as a package with the project's own signing certificate (one administrator prompt); see [docs/WINDOWS.md](docs/WINDOWS.md).
 
 ## Requirements (Linux)
 
@@ -107,6 +112,11 @@ Uninstall with `./scripts/install.sh --uninstall` (your data stays in `~/.local/
 - **Call recording**: the app records the phone's voice stream from PipeWire (`pw-record`, from `pipewire-utils`). Run `cargo run -p phone-linux --example rec_probe -- <phone address>` during a call to see whether the stream is found.
 - **Contacts are empty**: the phone has not been allowed to share them (see the setup steps above); press *Reload* in Contacts afterwards.
 
+### Windows
+
+- **Calls switch themselves off on the phone, or no call banner appears**: the phone keeps *Calls* on only while Windows has the computer's call link up. Wait for the pairing window to say so, then switch it on; if it still flips back, unpair and pair again from the app.
+- **Something else is wrong**: the app writes a log (`%LOCALAPPDATA%\Packages\GeekBridge.Phone_*\LocalCache\Local\GeekBridge\geekbridge-phone.log`); it says whether Windows accepted the call link.
+
 ## Privacy
 
 Everything stays on the Bluetooth link between the phone and this computer. Contacts, call history and your text history are cached in a small SQLite database (`cache.db`, owner-only) under `~/.local/share/geekbridge-phone`, so the app starts instantly and does not re-read everything from the phone. Nothing is sent anywhere else and there is no telemetry. The only network access is the optional update check (below).
@@ -118,7 +128,7 @@ The app updates itself from this repository's GitHub releases (*Settings > Updat
 ## Roadmap
 
 - **Windows**: a certificate from a recognised authority (the installer now trusts the project's own, with one administrator prompt), and more phones and Windows builds tested. [Details](docs/WINDOWS.md).
-- **macOS**: the same, with Apple's Bluetooth frameworks.
+- **macOS**: the last platform to port, with Apple's Bluetooth frameworks. After it, every platform works.
 - **More than one phone at a time**, and quick switching between them.
 - **More of the ecosystem**: shared clipboard and file drop are not part of calls and texts over Bluetooth, and would need another link.
 
