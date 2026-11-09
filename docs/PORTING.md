@@ -16,6 +16,8 @@ fn dial / answer / hang_up / hang_up_all / send_tones
 
 ## Windows (`phone-windows`)
 
+> **Done.** See [WINDOWS.md](WINDOWS.md) for how it works and what did not. The plan below is the original one; calls ended up using Windows' own phone line instead of `Windows.ApplicationModel.Calls` through a hand-made hands-free client.
+
 | Method | API |
 | --- | --- |
 | `phones` | `Windows.Devices.Enumeration` + `BluetoothDevice` (paired, connection status, name). Battery via the Bluetooth GATT/HFP battery property where available. |

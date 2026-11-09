@@ -214,9 +214,13 @@ pub fn default_notifier(host: NotifierHost) -> Box<dyn Notifier> {
     {
         Box::new(crate::notify_freedesktop::FreedesktopNotifier::new(host))
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(target_os = "windows")]
     {
-        // TODO(windows, macos): native toast notifications (WinRT ToastNotification,
+        Box::new(crate::notify_windows::WindowsNotifier::new(host))
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "windows")))]
+    {
+        // TODO(macos): native toast notifications (WinRT ToastNotification,
         // UNUserNotificationCenter) behind this same trait.
         let _ = host;
         Box::new(NullNotifier)

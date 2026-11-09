@@ -84,6 +84,8 @@ pub struct App {
     settings: SettingsState,
     notices: Notices,
     guide: GuideState,
+    /// Since when a connected phone has had no working call link (Windows setup hint).
+    calls_wait_since: Option<Instant>,
     updater: Updater,
     quitting: bool,
     pending_minimise: bool,
@@ -194,6 +196,7 @@ impl App {
             settings: SettingsState::default(),
             notices: Notices::default(),
             guide: GuideState::default(),
+            calls_wait_since: None,
             updater,
             quitting: false,
             pending_minimise: boot.start_minimised,
@@ -556,11 +559,33 @@ impl eframe::App for App {
             self.handle.send(Command::ReloadContacts);
         }
 
-        let active_problems = problems(
+        let mut active_problems = problems(
             live.phone.as_ref(),
             &live.messages_status,
             &live.contacts_status,
         );
+        // Windows only: a connected phone whose call link stays down needs "Calls" switched on in
+        // its Bluetooth settings. Wait a little first so start-up does not flash the hint.
+        #[cfg(target_os = "windows")]
+        {
+            let waiting = live.phone_connected() && !live.calls_ready && live.calls.is_empty();
+            if waiting {
+                let since = *self.calls_wait_since.get_or_insert(now_instant);
+                if now_instant.saturating_duration_since(since)
+                    >= std::time::Duration::from_secs(15)
+                {
+                    active_problems.push(crate::model::status::Problem::CallsNotReady);
+                }
+                ctx.request_repaint_after(std::time::Duration::from_secs(5));
+            } else {
+                self.calls_wait_since = None;
+            }
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            let _ = &mut active_problems;
+            let _ = &mut self.calls_wait_since;
+        }
         self.notices.expire(now_instant, &active_problems);
 
         let mut cmds: Vec<Cmd> = Vec::new();

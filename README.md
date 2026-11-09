@@ -6,7 +6,7 @@
 
 On a Mac with an iPhone, a call rings on the screen and you answer it right there. Texts arrive as banners you can reply to. That should not depend on which brand of phone is in your pocket or which operating system is on your desk.
 
-GeekBridge Phone brings that to **Android and iPhone, on Linux today, with Windows and macOS next**. A call or text appears in the top-right corner of your screen like a native notification: answer or decline the call, read the text, reply on the spot. It uses only the Bluetooth features every phone already has, the same ones a car uses. Nothing is installed on the phone, and nothing leaves the link between your phone and your computer.
+GeekBridge Phone brings that to **Android and iPhone, on Linux and Windows today, with macOS next**. A call or text appears in the top-right corner of your screen like a native notification: answer or decline the call, read the text, reply on the spot. It uses only the Bluetooth features every phone already has, the same ones a car uses. Nothing is installed on the phone, and nothing leaves the link between your phone and your computer.
 
 <p align="center">
   <img src="docs/img/app-messages-dark.png" width="420" alt="Messages, dark: conversations and an iMessage-style thread">
@@ -26,14 +26,14 @@ Phones and computers should work together whatever you buy. Today the smooth exp
 So that is the goal:
 
 - **Any phone.** Android and iPhone, the same app, the same banners.
-- **Any computer.** Linux now; Windows and macOS are the next ports.
+- **Any computer.** Linux and Windows now; macOS is the next port.
 - **Your data stays yours.** No account, no server, no telemetry. It all stays on your Bluetooth link and your disk.
 - **Nothing to install on the phone.** The phone already thinks your computer is a car.
 - **Open and small.** GPL-licensed, written in Rust, one lightweight program.
 
 It looks the way we think a phone companion should: macOS-style banners and dot-matrix type (true black or warm off-white, one red accent), in both light and dark.
 
-> **Status: 0.1.x, Linux.** Verified on real hardware: a Samsung Galaxy Z Fold5 (Android 17) and an iPhone. The OS-independent core builds and passes its tests on **Windows and macOS** in CI. The Windows and macOS platform layers are next ([docs/PORTING.md](docs/PORTING.md)).
+> **Status: 0.1.x, Linux and Windows.** Verified on real hardware: a Samsung Galaxy Z Fold5 (Android 17) and an iPhone on Linux, and the Z Fold5 on Windows 11 (pairing, texts, contacts, calls with the voice through the computer; see [docs/WINDOWS.md](docs/WINDOWS.md)). The OS-independent core also passes its tests on macOS in CI. The macOS platform layer is next ([docs/PORTING.md](docs/PORTING.md)).
 
 ## What it does
 
@@ -61,7 +61,7 @@ Verified means tested on a real phone. Other phones should behave the same, sinc
 | Computer | Status |
 | --- | --- |
 | **Linux** (BlueZ + PipeWire) | Works today |
-| **Windows** | Next. The core already passes its tests on Windows in CI. |
+| **Windows** | Works, as an installed package ([docs/WINDOWS.md](docs/WINDOWS.md)). Windows only carries the call voice for an installed app; run unpackaged you get calls, texts and contacts without the voice. |
 | **macOS** | After Windows. The core already passes its tests on macOS in CI. |
 
 ## Setting up
@@ -115,7 +115,7 @@ The app updates itself from this repository's GitHub releases (*Settings > Updat
 
 ## Roadmap
 
-- **Windows**: the platform layer for phones, message and phonebook streams, and call control, plus the corner banners. [The plan](docs/PORTING.md).
+- **Windows**: a signed installer for everyone else (today it installs as an unsigned developer package), and more phones tested. [Details](docs/WINDOWS.md).
 - **macOS**: the same, with Apple's Bluetooth frameworks.
 - **More than one phone at a time**, and quick switching between them.
 - **More of the ecosystem**: shared clipboard and file drop are not part of calls and texts over Bluetooth, and would need another link.

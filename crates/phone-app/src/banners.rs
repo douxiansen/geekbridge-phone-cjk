@@ -102,6 +102,8 @@ pub fn show(
                             handle.retry_messages()
                         }
                         Problem::ContactsFailed(_) => handle.send(Command::ReloadContacts),
+                        // Nothing to retry: the call link is checked again every few seconds.
+                        Problem::CallsNotReady => {}
                     }
                 }
             }

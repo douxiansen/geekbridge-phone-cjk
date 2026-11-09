@@ -95,6 +95,9 @@ pub enum Problem {
     MessageAccess,
     MessagesFailed(String),
     ContactsFailed(String),
+    /// Windows has no working call link for the connected phone yet, usually because the phone
+    /// was never told it may use this computer for calls.
+    CallsNotReady,
 }
 
 impl Problem {
@@ -103,6 +106,7 @@ impl Problem {
             Problem::MessageAccess => "Allow message access on your phone".into(),
             Problem::MessagesFailed(_) => "Messages are offline".into(),
             Problem::ContactsFailed(_) => "Contacts could not be loaded".into(),
+            Problem::CallsNotReady => "Turn on calls on your phone".into(),
         }
     }
 
@@ -110,6 +114,7 @@ impl Problem {
         match self {
             Problem::MessageAccess => "Your phone is asking whether this computer may use your messages. Tap Allow on the phone, then press Retry.".into(),
             Problem::MessagesFailed(why) | Problem::ContactsFailed(why) => why.clone(),
+            Problem::CallsNotReady => "On your phone: Settings > Bluetooth, tap the gear next to this computer and switch on Calls (call audio). Then ring the phone once: the call shows here and its voice comes through this computer.".into(),
         }
     }
 }
@@ -143,6 +148,7 @@ pub fn notice_is_redundant(notice: &str, active: &[Problem]) -> bool {
         Problem::MessageAccess => lower.contains("message access"),
         Problem::ContactsFailed(_) => lower.contains("read contacts"),
         Problem::MessagesFailed(_) => false,
+        Problem::CallsNotReady => false,
     })
 }
 

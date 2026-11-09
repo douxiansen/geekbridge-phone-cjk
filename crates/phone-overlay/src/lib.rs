@@ -13,6 +13,8 @@
 //!   so all of it is unit-testable.
 //! * **Linux presenter** (cargo feature `wayland`, default on Linux): a
 //!   `zwlr_layer_shell_v1` client in the top-right corner of the screen.
+//! * **Windows presenter**: a topmost, non-activating, layered window in the top-right corner
+//!   of the work area ([`win32`]).
 //!
 //! ```no_run
 //! use phone_overlay::{spawn, Banner, CallBanner, CallState, OverlayConfig};
@@ -52,6 +54,8 @@ pub mod theme;
 
 #[cfg(all(feature = "wayland", target_os = "linux"))]
 pub mod wayland;
+#[cfg(windows)]
+pub mod win32;
 
 pub use error::OverlayError;
 pub use input::{ButtonState, Key};
@@ -81,7 +85,11 @@ pub fn spawn(config: OverlayConfig) -> Result<(OverlayHandle, Receiver<Action>),
     {
         wayland::spawn(config)
     }
-    #[cfg(not(all(feature = "wayland", target_os = "linux")))]
+    #[cfg(windows)]
+    {
+        win32::spawn(config)
+    }
+    #[cfg(not(any(all(feature = "wayland", target_os = "linux"), windows)))]
     {
         let _ = config;
         Err(OverlayError::Unsupported)

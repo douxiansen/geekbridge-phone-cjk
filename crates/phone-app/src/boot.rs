@@ -56,7 +56,7 @@ impl Platform for UnavailablePlatform {
 
 /// The real phone platform for this operating system.
 ///
-/// TODO(windows, macos): construct the WinRT / IOBluetooth platforms here (see docs/PORTING.md).
+/// TODO(macos): construct the IOBluetooth platform here (see docs/PORTING.md).
 pub fn live_platform() -> Arc<dyn Platform> {
     #[cfg(target_os = "linux")]
     {
@@ -70,7 +70,11 @@ pub fn live_platform() -> Arc<dyn Platform> {
             }
         }
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(target_os = "windows")]
+    {
+        Arc::new(phone_windows::WindowsPlatform)
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "windows")))]
     {
         Arc::new(UnavailablePlatform::new(
             "This system is not supported yet.",

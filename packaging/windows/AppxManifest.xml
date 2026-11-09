@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Package manifest for GeekBridge Phone on Windows.
+
+  Windows only lets an installed (packaged) app that declares itself a call handler create the
+  phone line for a Bluetooth phone and carry the call voice. Two parts of this file matter for
+  that: the `phoneCall` capability and the `windows.phoneCallActivation` extension.
+  The build script copies this file next to geekbridge-phone.exe and registers it.
+-->
+<Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+         xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+         xmlns:uap13="http://schemas.microsoft.com/appx/manifest/uap/windows10/13"
+         xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+         IgnorableNamespaces="uap uap13 rescap">
+  <Identity Name="GeekBridge.Phone" Publisher="CN=GeekBridge" Version="0.1.4.0" ProcessorArchitecture="x64" />
+  <Properties>
+    <DisplayName>GeekBridge Phone</DisplayName>
+    <PublisherDisplayName>GeekBridge</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+  </Properties>
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.19041.0" MaxVersionTested="10.0.26100.0" />
+  </Dependencies>
+  <Resources>
+    <Resource Language="en-us" />
+  </Resources>
+  <Applications>
+    <Application Id="App" Executable="geekbridge-phone.exe" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements DisplayName="GeekBridge Phone"
+                          Description="Calls, texts and contacts from your phone, on your computer"
+                          BackgroundColor="#0c0c0c"
+                          Square150x150Logo="Assets\Square150x150Logo.png"
+                          Square44x44Logo="Assets\Square44x44Logo.png" />
+      <Extensions>
+        <uap13:Extension Category="windows.phoneCallActivation" />
+      </Extensions>
+    </Application>
+  </Applications>
+  <Capabilities>
+    <rescap:Capability Name="runFullTrust" />
+    <uap:Capability Name="phoneCall" />
+    <DeviceCapability Name="bluetooth" />
+  </Capabilities>
+</Package>
