@@ -60,8 +60,9 @@ BlueZ. For an iPhone the setup guide opens by itself, as on Linux:
 3. Ring the iPhone and answer from the banner. If the voice stays on the iPhone, tap **Audio** on its
    call screen and pick this computer once.
 
-Apple lets a car send texts only by voice, so sending a text may be refused. Tried on Windows with a
-real iPhone: pairing, the setup guide and calls work.
+Apple lets a car send texts only by voice, so an iPhone may refuse to send one; a text sent from the
+app through an iPhone to an Android phone did arrive. Tried on Windows with a real iPhone: pairing, the
+setup guide, calls and sending a text work.
 
 ## Building and running it as a developer
 

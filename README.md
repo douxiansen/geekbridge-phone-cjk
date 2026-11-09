@@ -53,8 +53,8 @@ It looks the way we think a phone companion should: macOS-style banners and dot-
 | Calls: banner, answer, decline, hang up, talk through the computer | Verified | Verified |
 | Contacts and call history | Verified | Verified (needs *Sync Contacts*) |
 | Reading texts | Verified | Verified (needs *Show Notifications*) |
-| Sending texts | Verified | Not verified: Apple lets cars send texts only by voice, so expect a refusal |
-| Quick reply from the banner | Verified | Depends on sending |
+| Sending texts | Verified | Verified on Windows (a text sent from the app to an Android phone arrived). Not verified on Linux: Apple lets cars send texts only by voice, so a phone may refuse |
+| Quick reply from the banner | Verified | Depends on sending (works where sending works) |
 
 Verified means tested on a real phone. Other phones should behave the same, since they speak the same standard profiles, but we have only tested the ones above.
 
