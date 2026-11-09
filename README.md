@@ -61,7 +61,7 @@ Verified means tested on a real phone. Other phones should behave the same, sinc
 | Computer | Status |
 | --- | --- |
 | **Linux** (BlueZ + PipeWire) | Works today, including the call voice through the computer |
-| **Windows** | Works today with **Android and iPhone**, including the call voice through the computer ([docs/WINDOWS.md](docs/WINDOWS.md)): pairing from the app, calls, texts and contacts. It runs as an installed package, which is what lets Windows carry the voice; run unpackaged you get calls, texts and contacts without the voice. |
+| **Windows** | Works today with **Android and iPhone**, including the call voice through the computer ([docs/WINDOWS.md](docs/WINDOWS.md)): pairing from the app, calls, texts and contacts. Use the installer from the release: Windows only lets an installed app carry the call voice. If you start the `.exe` directly without installing it, calls still ring and can be answered, and texts and contacts work, but the voice stays on the phone. |
 | **macOS** | The last one to port. The core already passes its tests on macOS in CI. |
 
 ## Setting up
